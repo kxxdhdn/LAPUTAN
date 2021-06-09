@@ -1,0 +1,28 @@
+#+TITLE: laputan SwING library
+#+AUTHOR: Dangning HU
+
+For synthetic photometry
+
+* Installation Guide
+1. Open ~utilities.f90~, search ~/path/of/this/file/~ and modify ~LibF~ with the location of this file in your machine.
+2. Launch a terminal window and change directories to the same directory.
+3. Execute the installation program by entering the following command. 
+   #+BEGIN_SRC bash
+   make
+   #+END_SRC
+4. Add this directory to your environment variable ~$PATH~ (e.g. in ~.bashrc~)
+5. [Optional] Run the test.
+   #+BEGIN_SRC bash
+   cd tests
+   python test_synthetic_photometry.py
+   #+END_SRC
+6. [Optional] To uninstall, just run 
+   #+BEGIN_SRC bash
+   make mrproper
+   #+END_SRC
+* Troubleshooting
+- ~swing~ is extracted from F. Galliano's library ~SwING~ which is not yet published. To compile it, you need h5fc library which can be obtained by installing [[https://www.hdfgroup.org/downloads/hdf5/source-code/][hdf5]]. Note that if you have other hdf5 installed for example by anaconda, there might be conflicts when calling h5fc. Make sure the correct ~/hdf5/bin~ is on the top of environment variable ~$PATH~.
+
+Please report any bug or advices to dangning.hu@cea.fr
+* vlog
+- v0.1 (20200413)
