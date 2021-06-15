@@ -13,7 +13,7 @@ Imaging
         image, wave
     imontage(improve):
         make_header, make, footprint, reproject, reproject_mc,
-        combine, clean
+        combine, coadd, clean
     iswarp(improve):
         footprint, combine, clean
     iconvolve(improve):
@@ -35,6 +35,7 @@ from astropy import wcs
 from astropy.io import ascii
 from astropy.table import Table
 from reproject import reproject_interp
+from reproject.mosaicking import reproject_and_coadd
 import subprocess as SP
 
 ## Local
@@ -146,7 +147,7 @@ class improve:
 
         return self.im
 
-    def slice(self, filSL, postfix=''):
+    def slice(self, filSL, postfix='', ext=''):
         ## 3D cube slicing
         slist = []
         if self.Ndim==3:
@@ -158,12 +159,12 @@ class improve:
             for k in range(self.Nw):
                 ## output filename list
                 f = filSL+'_'+'0'*(4-len(str(k)))+str(k)+postfix
-                slist.append(f)
+                slist.append(f+ext)
                 write_fits(f, hdr, self.im[k,:,:]) # gauss_noise inclu
         else:
             print('Input file is a 2D image which cannot be sliced! ')
             f = filSL+'_0000'+postfix
-            slist.append(f)
+            slist.append(f+ext)
             write_fits(f, self.hdr, self.im) # gauss_noise inclu
             print('Rewritten with only random noise added (if provided).')
 
@@ -191,8 +192,8 @@ class improve:
 
         return slist
     
-    def crop(self, filOUT=None, \
-        sizpix=None, cenpix=None, sizval=None, cenval=None):
+    def crop(self, filOUT=None,
+             sizpix=None, cenpix=None, sizval=None, cenval=None):
         '''
         If pix and val co-exist, pix will be taken.
 
@@ -282,7 +283,7 @@ class islice(improve):
     Slice a cube
 
     ------ INPUT ------
-    filIN               input FITS
+    filIN               input FITS file
     filSL               ouput path+basename
     filUNC              input uncertainty FITS
     dist                unc pdf
@@ -294,8 +295,8 @@ class islice(improve):
     self: slist, path_tmp, 
           (filIN, wmod, hdr, w, cdelt, pc, cd, Ndim, Nx, Ny, Nw, im, wvl)
     '''
-    def __init__(self, filIN, filSL=None, filUNC=None, dist='norm', \
-        slicetype=None, postfix=''):
+    def __init__(self, filIN, filSL=None, filUNC=None, dist='norm',
+                 slicetype=None, postfix=''):
         super().__init__(filIN)
 
         if filSL is None:
@@ -305,7 +306,7 @@ class islice(improve):
 
             filSL = path_tmp+'slice'
         self.filSL = filSL
-        
+
         if dist=='norm':
             self.rand_norm(filUNC)
         elif dist=='splitnorm':
@@ -335,19 +336,19 @@ class icrop(improve):
     '''
     CROP 2D image or 3D cube
     '''
-    def __init__(self, filIN, filOUT=None, \
-                 sizpix=None, cenpix=None, sizval=None, cenval=None, \
+    def __init__(self, filIN, filOUT=None,
+                 sizpix=None, cenpix=None, sizval=None, cenval=None,
                  filUNC=None, dist='norm', wmod=0, verbose=False):
         ## slicrop: slice 
         super().__init__(filIN, wmod, verbose)
-
+        
         if dist=='norm':
             self.rand_norm(filUNC)
         elif dist=='splitnorm':
             self.rand_splitnorm(filUNC)
         
-        im_crop = self.crop(filOUT=filOUT, sizpix=sizpix, cenpix=cenpix, \
-            sizval=sizval, cenval=cenval) # gauss_noise inclu
+        im_crop = self.crop(filOUT=filOUT, sizpix=sizpix, cenpix=cenpix,
+                            sizval=sizval, cenval=cenval) # gauss_noise inclu
 
     def image(self):
         return self.im
@@ -372,8 +373,8 @@ class imontage(improve):
     tmpdir              tmp file path
     ------ OUTPUT ------
     '''
-    def __init__(self, file, filREF=None, hdREF=None, \
-        fmod='ref', ext_pix=0, tmpdir=None):
+    def __init__(self, file, filREF=None, hdREF=None,
+                 fmod='ref', ext_pix=0, tmpdir=None):
         '''
         self: hdr_ref, path_tmp, 
         (filIN, wmod, hdr, w, Ndim, Nx, Ny, Nw, im, wvl)
@@ -388,7 +389,7 @@ class imontage(improve):
         self.path_tmp = path_tmp
 
         ## Inputs
-        self.file = file
+        self.file = allist(file)
         self.filREF = filREF
         self.hdREF = hdREF
         self.fmod = fmod
@@ -399,7 +400,7 @@ class imontage(improve):
 
     def make_header(self, filIN, filREF=None, hdREF=None, fmod='ref', ext_pix=0):
         '''
-        Make header tool
+        Header maker
 
         ------ INPUT ------
         filIN               single FITS file
@@ -424,7 +425,7 @@ class imontage(improve):
                 pix_old.append([self.Nx, self.Ny])
                 world_arr = self.w.all_pix2world(np.array(pix_old), 1)
                 ## Ref WCS (new)
-                w = fixwcs(header=hdREF+fitsext).wcs
+                w = fixwcs(header=hdREF).wcs
                 try:
                     pix_new = w.all_world2pix(world_arr, 1)
                 except wcs.wcs.NoConvergence as e:
@@ -448,10 +449,10 @@ class imontage(improve):
                         hdREF['CRPIX1'] += -xmin
                     if ymin<0:
                         hdREF['CRPIX2'] += -ymin
-                    hdREF['NAXIS1'] = math.ceil(max(xmax, hdREF['NAXIS1']-xmin, \
-                        xmax-xmin, hdREF['NAXIS1'])) + ext_pix # save edges
-                    hdREF['NAXIS2'] = math.ceil(max(ymax, hdREF['NAXIS2']-ymin, \
-                        ymax-ymin, hdREF['NAXIS2'])) + ext_pix
+                    hdREF['NAXIS1'] = math.ceil(max(xmax, hdREF['NAXIS1']-xmin,
+                                                    xmax-xmin, hdREF['NAXIS1'])) + ext_pix # save edges
+                    hdREF['NAXIS2'] = math.ceil(max(ymax, hdREF['NAXIS2']-ymin,
+                                                    ymax-ymin, hdREF['NAXIS2'])) + ext_pix
             ## Save hdREF
             self.hdr_ref = hdREF
 
@@ -463,7 +464,7 @@ class imontage(improve):
             #     self.hdr['CRVAL1'], self.hdr['CRVAL2'], 1))
             # exit()
         else:
-            raise ValueError('Cannot find projection reference! ')
+            raise ValueError('Cannot find reprojection reference! ')
 
     def make(self):
         '''
@@ -482,8 +483,8 @@ class imontage(improve):
             if fmod=='ext':
                 ## Refresh self.hdr_ref in every circle
                 for f in file:
-                    self.make_header(filIN=f, filREF=None, \
-                        hdREF=self.hdr_ref, fmod='ext', ext_pix=ext_pix)
+                    self.make_header(filIN=f, filREF=None,
+                                     hdREF=self.hdr_ref, fmod='ext', ext_pix=ext_pix)
         
         tqdm.write('<imontage> Making ref header...[done]')
 
@@ -505,15 +506,14 @@ class imontage(improve):
 
         return im_fp
 
-    def reproject(self, filIN, filOUT=None, \
-        filUNC=None, dist='norm', postfix=''):
+    def reproject(self, filIN, filOUT=None,
+                  dist=None, postfix=''):
         '''
         Reproject 2D image or 3D cube
 
         ------ INPUT ------
         filIN               single FITS file to reproject
         filOUT              output FITS file
-        filUNC              unc files
         dist                uncertainty distribution
                               'norm' - N(0,1)
                               'splitnorm' - SN(0,lam,lam*tau)
@@ -524,9 +524,9 @@ class imontage(improve):
         super().__init__(filIN)
         
         if dist=='norm':
-            self.rand_norm(filUNC)
+            self.rand_norm(filIN+'_unc')
         elif dist=='splitnorm':
-            self.rand_splitnorm(filUNC)
+            self.rand_splitnorm([file[i]+'_unc_N', file[i]+'_unc_P'])
         
         ## Set reprojection tmp path
         ##---------------------------
@@ -536,7 +536,6 @@ class imontage(improve):
             os.makedirs(rep_tmp)
 
         self.slist = self.slice(rep_tmp+'slice', '_') # gauss_noise inclu
-
         ## Do reprojection
         ##-----------------
         cube_rep = []
@@ -559,37 +558,36 @@ class imontage(improve):
         if filOUT is None:
             filOUT = self.path_tmp+filename+postfix+'_rep'
         self.file_rep = filOUT
-        
-        write_fits(filOUT, self.hdr_ref, self.im, self.wvl, wmod=0, \
-                COMMENT=comment)
+
+        write_fits(filOUT, self.hdr_ref, self.im, self.wvl, wmod=0,
+                   COMMENT=comment)
         
         return self.im
 
-    def reproject_mc(self, filIN, filUNC, Nmc=0, dist='norm'):
+    def reproject_mc(self, filIN, filOUT=None, Nmc=0, dist=None):
         '''
         Generate Monte-Carlo uncertainties for reprojected input file
         '''
         dataset = type('', (), {})()
 
         hyperim = [] # [j,(w,)y,x]
-        for j in trange(Nmc+1, leave=False, \
-            desc='<imontage> Reprojection (MC level)'):
+        for j in trange(Nmc+1, leave=False,
+                        desc='<imontage> Reprojection (MC level)'):
 
             if j==0:
-                im0 = self.reproject(filIN, \
-                    filUNC=None, dist=dist)
+                im0 = self.reproject(filIN, filOUT=filOUT, dist=dist)
                 file_rep = self.file_rep
             else:
-                hyperim.append(self.reproject(filIN, \
-                    filUNC=filUNC, dist=dist, postfix='_'+str(j)))
+                hyperim.append(self.reproject(filIN, filOUT=filOUT,
+                                              dist=dist, postfix='_'+str(j)))
         im0 = np.array(im0)
         hyperim = np.array(hyperim)
         unc = np.nanstd(hyperim, axis=0)
+        comment = "Created by <imontage>"
 
-        comment = "An <imontage> production"
-        
-        write_fits(file_rep+'_unc', self.hdr_ref, unc, self.wvl, \
-            COMMENT=comment)
+        if Nmc>0:
+            write_fits(file_rep+'_unc', self.hdr_ref, unc, self.wvl,
+                       COMMENT=comment)
 
         dataset.im0 = im0
         dataset.unc = unc
@@ -597,14 +595,14 @@ class imontage(improve):
 
         return dataset
 
-    def combine(self, file, filOUT=None, method='avg', \
-        filUNC=None, do_rep=True, Nmc=0, dist='norm'):
+    def combine(self, file, filOUT=None, method='avg',
+                do_rep=True, Nmc=0, dist=None):
         '''
         Stitching input files (with the same wavelengths) to the ref WCS
 
-        If filUNC is None, no MC
         If Nmc==0, no MC
         '''
+        file = allist(file)
         dataset = type('', (), {})()
         wvl = read_fits(file[0]).wave
         dataset.wvl = wvl
@@ -613,17 +611,18 @@ class imontage(improve):
         superunc = [] # [i,(w,)y,x]
         superim = [] # [i,j,(w,)y,x]
         Nf = np.size(file)
-        for i in trange(Nf, leave=False, \
-            desc='<imontage> Reprojection (file level)'):
+        for i in trange(Nf, leave=False,
+                        desc='<imontage> Reprojection (file level)'):
             ## (Re)do reprojection
             ##---------------------
             if do_rep==True:
                 ## With MC
-                if filUNC is not None:
-                    im0, unc, hyperim = self.reproject_mc(file[i], filUNC[i], \
-                        Nmc=Nmc, dist=dist)
-                    superunc.append(unc)
-                    superim.append(hyperim)
+                if Nmc>0:
+                    rep = self.reproject_mc(file[i], Nmc=Nmc, dist=dist)
+                    im0 = rep.im0
+                    
+                    superunc.append(rep.unc)
+                    superim.append(rep.hyperim)
                 ## Without MC
                 else:
                     im0 = self.reproject(file[i])                    
@@ -634,7 +633,7 @@ class imontage(improve):
             else:
                 filename = os.path.basename(file[i])
                 file_rep = self.path_tmp+filename+'_rep'
-                if filUNC is not None:
+                if Nmc>0:
                     hyperim = [] # [j,(w,)y,x]
                     for j in range(Nmc+1):
                         if j==0:
@@ -652,12 +651,13 @@ class imontage(improve):
 
         ## Combine images
         ##----------------
+        hyperim_comb = []
+        unc_comb = np.nanstd(hyperim_comb)
         ## Think about using 'try - except'
-        if filUNC is not None:
+        if Nmc>0:
             inv_var = 1./superunc**2
-            hyperim_comb = []
-            for j in trange(Nmc+1, leave=False, \
-                desc='<imontage> Stitching'):
+            for j in trange(Nmc+1, leave=False,
+                            desc='<imontage> Stitching'):
                 if j==0:
                     if method=='avg':
                         im0_comb = nanavg(superim0, axis=0)
@@ -678,10 +678,10 @@ class imontage(improve):
         if filOUT is not None:
             comment = "An <imontage> production"
 
-            write_fits(filOUT, self.hdr_ref, im0_comb, wvl, \
-                COMMENT=comment)
-            write_fits(filOUT+'_unc', self.hdr_ref, im0_comb, wvl, \
-                COMMENT=comment)
+            write_fits(filOUT, self.hdr_ref, im0_comb, wvl,
+                       COMMENT=comment)
+            write_fits(filOUT+'_unc', self.hdr_ref, unc_comb, wvl,
+                       COMMENT=comment)
         
         dataset.im0_comb = im0_comb
         dataset.unc_comb = unc_comb
@@ -691,6 +691,82 @@ class imontage(improve):
         dataset.superim = superim
 
         tqdm.write('<imontage> Combining images...[done]')
+        
+        return dataset
+
+    def coadd(self, file, filOUT=None,
+              Nmc=0, dist=None):
+        '''
+        Same function with combine() using reproject.reproject_and_coadd()
+        '''
+        file = allist(file)
+        dataset = type('', (), {})()
+        comment = "Created by <imontage>"
+
+        for j in trange(Nmc+1, leave=False,
+                        desc='<imontage> Coadd (MC)'):
+            sl = []
+            if j==0:
+                for f in file:
+                    super().__init__(f)
+
+                    filename = os.path.basename(f)
+                    coadd_tmp = self.path_tmp+filename+'/'
+                    if not os.path.exists(coadd_tmp):
+                        os.makedirs(coadd_tmp)
+                    sl.append(self.slice(coadd_tmp+'slice', ext=fitsext))
+                slist = [np.array(sl)]
+            else:
+                for f in file:
+                    super().__init__(f)
+
+                    filename = os.path.basename(f)
+                    coadd_tmp = self.path_tmp+filename+'/'
+                    if not os.path.exists(coadd_tmp):
+                        os.makedirs(coadd_tmp)
+                    if dist=='norm':
+                        self.rand_norm(f+'_unc')
+                    elif dist=='splitnorm':
+                        self.rand_splitnorm([f+'_unc_N', f+'_unc_P'])
+                
+                    sl.append(self.slice(coadd_tmp+'slice',
+                                            postfix='_'+str(j), ext=fitsext))
+                slist.append(np.array(sl))
+        slist = np.array(slist)
+        
+        if self.Nw is None:
+            Nw = 1
+        else:
+            Nw = self.Nw
+        superim = []
+        for j in trange(Nmc+1, leave=False,
+                        desc='<imontage> Coadd (MC)'):
+            if j==0:
+                im = []
+                for i in range(Nw):
+                    im.append(reproject_and_coadd(slist[j,:,i], self.hdr_ref,
+                                                  reproject_function=reproject_interp)[0])
+                im = np.array(im)
+
+                write_fits(filOUT, self.hdr_ref, im, self.wvl, wmod=0,
+                           COMMENT=comment)
+            else:
+                hyperim = []
+                for i in range(Nw):
+                    hyperim.append(reproject_and_coadd(slist[j,:,i], self.hdr_ref,
+                                                       reproject_function=reproject_interp)[0])
+                superim.append(np.array(hyperim))
+        superim = np.array(superim)
+        unc = np.nanstd(superim, axis=0)
+
+        if Nmc>0:
+            write_fits(filOUT+'_unc', self.hdr_ref, unc, self.wvl, wmod=0,
+                       COMMENT=comment)
+
+        dataset.wvl = self.wvl
+        dataset.im = im
+        dataset.unc = unc
+        dataset.superim = superim
         
         return dataset
 
@@ -707,7 +783,8 @@ class iswarp(improve):
     In competetion with its fully Python-based twin <imontage>
 
     ------ INPUT ------
-    filIN               ref FITS files used to make header (footprint)
+    file                ref FITS files used to make header (footprint)
+    refheader           scaling matrix adopted if co-exist with file
     center              center of output image frame
                           None - contains all input fields
                           str('hh:mm:ss,dd:mm:ss') - manual input RA,DEC
@@ -724,7 +801,7 @@ class iswarp(improve):
      one must write a coadd.head ASCII file that contains 
      a custom anisotropic scaling matrix. "
     '''
-    def __init__(self, filIN=None, refheader=None,
+    def __init__(self, file=None, refheader=None,
                  center=None, pixscale=None, 
                  verbose=False, tmpdir=None):
         '''
@@ -750,31 +827,43 @@ class iswarp(improve):
 
         fclean(path_tmp+'coadd*') # remove previous coadd.fits/.head
 
-        if filIN is None:
+        if file is None:
             if refheader is None:
                 raise ValueError('No input!')
+            
+            ## Define coadd frame via refheader
             else:
+                if center is not None or pixscale is not None:
+                    print('Warning: The keywords center and pixscale are dumb. ')
+
                 self.refheader = refheader
         else:
-            ## Input files in list format
-            filIN = allist(filIN)
-            
+            ## Input files in list object
+            file = allist(file)
+                
             ## Images
             image_files = ' '
-            for i in range(len(filIN)):
-                image = read_fits(filIN[i]).data
-                hdr = fixwcs(filIN[i]+fitsext).header
-                file_ref = filIN[i]
+            list_ref = []
+            for i in range(len(file)):
+                image = read_fits(file[i]).data
+                hdr = fixwcs(file[i]+fitsext).header
+                file_ref = file[i]
                 if image.ndim==3:
                     ## Extract 1st frame of the cube
-                    file_ref = path_tmp+os.path.basename(filIN[i])+'_ref'
+                    file_ref = path_tmp+os.path.basename(file[i])+'_ref'
                     write_fits(file_ref, hdr, image[0])
                 
-                image_files += file_ref+fitsext+' ' # input str for SWarp
+                image_files += file_ref+fitsext+' ' # SWarp input str
+                list_ref.append(file_ref+fitsext) # reproject input
+
+            ## Define coadd frame
+            ##--------------------
+            
+            ## via SWarp without refheader (isotropic scaling matrix)
             
             ## Create config file
-            SP.call('swarp -d > swarp.cfg', \
-                shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
+            SP.call('swarp -d > swarp.cfg',
+                    shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
             
             ## Config param list
             swarp_opt = ' -c swarp.cfg -SUBTRACT_BACK N -IMAGEOUT_NAME coadd.ref.fits '
@@ -786,17 +875,45 @@ class iswarp(improve):
                 swarp_opt += ' -VERBOSE_TYPE QUIET '
             
             ## Run SWarp
-            SP.call('swarp '+swarp_opt+image_files, \
-                shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
+            SP.call('swarp '+swarp_opt+image_files,
+                    shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
             print('Running SWarp...')
 
-            ## Save ref header
-            if refheader is None:
-                self.refheader = read_fits(path_tmp+'coadd.ref').header
-            else:
+            self.refheader = read_fits(path_tmp+'coadd.ref').header
+            
+            ## via reproject with refheader (custom anisotropic scaling matrix)
+            if refheader is not None:
+                if center is not None or pixscale is not None:
+                    print('Warning: The keywords center and pixscale are dumb. ')
+
+                super().__init__(path_tmp+'coadd.ref')
+                pix_old = [[0, 0]]
+                pix_old.append([0, self.Ny])
+                pix_old.append([self.Nx, 0])
+                pix_old.append([self.Nx, self.Ny])
+                world_arr = self.w.all_pix2world(np.array(pix_old), 1)
+                
+                w = fixwcs(header=refheader).wcs
+                try:
+                    pix_new = w.all_world2pix(world_arr, 1)
+                except wcs.wcs.NoConvergence as e:
+                    pix_new = e.best_solution
+                    print("Best solution:\n{0}".format(e.best_solution))
+                    print("Achieved accuracy:\n{0}".format(e.accuracy))
+                    print("Number of iterations:\n{0}".format(e.niter))
+                xmin = min(pix_new[:,0])
+                xmax = max(pix_new[:,0])
+                ymin = min(pix_new[:,1])
+                ymax = max(pix_new[:,1])
+
+                refheader['CRPIX1'] += -xmin
+                refheader['CRPIX2'] += -ymin
+                refheader['NAXIS1'] = math.ceil(xmax - xmin)
+                refheader['NAXIS2'] = math.ceil(ymax - ymin)
+                
                 self.refheader = refheader
 
-        # fclean(path_tmp+'*_ref.fits')
+        # fclean(path_tmp+'*ref.fits')
 
     def footprint(self, filOUT=None):
         '''
@@ -814,8 +931,8 @@ class iswarp(improve):
 
         return im_fp
 
-    def combine(self, file, combtype='med', \
-        keepedge=False, uncpdf=None, filOUT=None, tmpdir=None):
+    def combine(self, file, combtype='med',
+                keepedge=False, uncpdf=None, filOUT=None, tmpdir=None):
         '''
         Combine 
 
@@ -900,8 +1017,8 @@ class iswarp(improve):
                     weight_files[k] += wgtlist[i][k]+fitsext+' '
 
             ## Create config file
-            SP.call('swarp -d > swarp.cfg', \
-                shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
+            SP.call('swarp -d > swarp.cfg',
+                    shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
             ## Config param list
             swarp_opt = ' -c swarp.cfg -SUBTRACT_BACK N '
             if combtype=='med':
@@ -916,8 +1033,8 @@ class iswarp(improve):
             if verbose=='quiet':
                 swarp_opt += ' -VERBOSE_TYPE QUIET '
             ## Run SWarp
-            SP.call('swarp '+swarp_opt+' -RESAMPLING_TYPE LANCZOS3 '+image_files[k], \
-                shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
+            SP.call('swarp '+swarp_opt+' -RESAMPLING_TYPE LANCZOS3 '+image_files[k],
+                    shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
             coadd = read_fits(path_tmp+'coadd')
             newimage = coadd.data
             newheader = coadd.header
@@ -1006,8 +1123,8 @@ class iconvolve(improve):
     filOUT              output file
     ------ OUTPUT ------
     '''
-    def __init__(self, filIN, kfile, klist, \
-        filUNC=None, dist='norm', psf=None, convdir=None, filOUT=None):
+    def __init__(self, filIN, kfile, klist,
+                 filUNC=None, dist='norm', psf=None, convdir=None, filOUT=None):
         ## INPUTS
         super().__init__(filIN)
         
@@ -1030,7 +1147,7 @@ class iconvolve(improve):
         else:
             self.psf = psf
         self.sigma_lam = None
-                
+        
     def spitzer_irs(self):
         '''
         Spitzer/IRS PSF profil
@@ -1121,8 +1238,8 @@ class iconvolve(improve):
         
         self.choker(f2conv)
 
-        SP.call('idl conv.pro', \
-            shell=True, cwd=idldir, stdout=devnull, stderr=SP.STDOUT)
+        SP.call('idl conv.pro',
+                shell=True, cwd=idldir, stdout=devnull, stderr=SP.STDOUT)
 
         ## OUTPUTS
         ##---------
@@ -1279,21 +1396,21 @@ class sextract(improve):
 
         if filOUT is not None:
             comment = "Assembled AKARI/IRC slit spectroscopy cube. "
-            write_fits(filOUT, self.hdr, self.cube, self.wvl, \
-                COMMENT=comment)
+            write_fits(filOUT, self.hdr, self.cube, self.wvl,
+                       COMMENT=comment)
 
             if write_unc==True:
                 uncom = "Assembled AKARI/IRC slit spec uncertainty cube. "
-                write_fits(filOUT+'_unc', self.hdr, self.unc, self.wvl, \
-                    COMMENT=uncom)
+                write_fits(filOUT+'_unc', self.hdr, self.unc, self.wvl,
+                           COMMENT=uncom)
 
                 uncom_N = "Assembled AKARI/IRC slit spec uncertainty (N) cube. "
-                write_fits(filOUT+'_unc_N', self.hdr, self.unc_N, self.wvl, \
-                    COMMENT=uncom)
+                write_fits(filOUT+'_unc_N', self.hdr, self.unc_N, self.wvl,
+                           COMMENT=uncom)
 
                 uncom_P = "Assembled AKARI/IRC slit spec uncertainty (P) cube. "
-                write_fits(filOUT+'_unc_P', self.hdr, self.unc_P, self.wvl, \
-                    COMMENT=uncom)
+                write_fits(filOUT+'_unc_P', self.hdr, self.unc_P, self.wvl,
+                           COMMENT=uncom)
 
         return self.cube
 
@@ -1365,8 +1482,8 @@ def wmask(filIN, filOUT=None):
     '''
     pass
 
-def wclean(filIN, cmod='eq', cfile=None, \
-    wmod=0, filOUT=None, verbose=False):
+def wclean(filIN, cmod='eq', cfile=None,
+           wmod=0, filOUT=None, verbose=False):
     '''
     CLEAN Wavelengths
 
@@ -1502,8 +1619,8 @@ def wclean(filIN, cmod='eq', cfile=None, \
         wlist = []
         for i in ind:
             wlist.append([i, wave[i]])
-        write_csv(filOUT+'_wclean_info', \
-            header=['Ind', 'Wavelengths'], dset=wlist)
+        write_csv(filOUT+'_wclean_info',
+                  header=['Ind', 'Wavelengths'], dset=wlist)
 
     return data_new, wave_new
 
@@ -1590,8 +1707,8 @@ def hextract(filIN, filOUT, x0, x1, y0, y1):
 
     return newimage
 
-def hswarp(oldimage, oldheader, refheader, \
-    keepedge=False, tmpdir=None, verbose=True):
+def hswarp(oldimage, oldheader, refheader,
+           keepedge=False, tmpdir=None, verbose=True):
     '''
     Python version of hswarp (IDL), 
     a SWarp drop-in replacement for hastrom, 
@@ -1632,15 +1749,15 @@ def hswarp(oldimage, oldheader, refheader, \
         f.write(str(refheader))
 
     ## Create config file
-    SP.call('swarp -d > swarp.cfg', \
-        shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
+    SP.call('swarp -d > swarp.cfg',
+            shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
     ## Config param list
     swarp_opt = ' -c swarp.cfg -SUBTRACT_BACK N '
     if verbose=='quiet':
         swarp_opt += ' -VERBOSE_TYPE QUIET '
     ## Run SWarp
-    SP.call('swarp '+swarp_opt+' -RESAMPLING_TYPE LANCZOS3 '+' old.fits', \
-        shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
+    SP.call('swarp '+swarp_opt+' -RESAMPLING_TYPE LANCZOS3 '+' old.fits',
+            shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
     coadd = read_fits(path_tmp+'coadd')
     newimage = coadd.data
     newheader = coadd.header
@@ -1650,8 +1767,8 @@ def hswarp(oldimage, oldheader, refheader, \
     if keepedge==True:
         oldweight = read_fits(path_tmp+'coadd.weight').data
         if np.sum(oldweight==0)!=0:
-            SP.call('swarp '+swarp_opt+' -RESAMPLING_TYPE LANCZOS2 '+' old.fits', \
-                shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
+            SP.call('swarp '+swarp_opt+' -RESAMPLING_TYPE LANCZOS2 '+' old.fits',
+                    shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
             edgeimage = read_fits(path_tmp+'coadd').data
             newweight = read_fits(path_tmp+'coadd.weight').data
             edgeidx = np.ma.array(oldweight, 
@@ -1672,8 +1789,8 @@ def hswarp(oldimage, oldheader, refheader, \
 
                 oldweight = read_fits(path_tmp+'coadd.weight').data
                 if np.sum(oldweight==0)!=0:
-                    SP.call('swarp '+swarp_opt+' -RESAMPLING_TYPE NEAREST '+' old.fits', \
-                        shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
+                    SP.call('swarp '+swarp_opt+' -RESAMPLING_TYPE NEAREST '+' old.fits',
+                            shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
                     edgeimage = read_fits(path_tmp+'coadd').data
                     newweight = read_fits(path_tmp+'coadd.weight').data
                     edgeidx = np.ma.array(oldweight, 
@@ -1769,8 +1886,7 @@ def concatenate(flist, filOUT=None, comment=None, sort_wave=False):
 
     ## Write FITS file
     if filOUT is not None:
-        write_fits(filOUT, hdr, data, wave, \
-            COMMENT=comment)
+        write_fits(filOUT, hdr, data, wave, COMMENT=comment)
 
     return dataset
 

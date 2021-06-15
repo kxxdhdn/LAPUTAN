@@ -12,6 +12,7 @@ if not os.path.exists(outdir):
     os.makedirs(outdir)
 
 import numpy as np
+import matplotlib.pyplot as plt
 from astropy.io import fits
 from astropy.wcs import WCS
 
@@ -19,8 +20,9 @@ from astropy.wcs import WCS
 sys.path.insert(0, testdir+'/..') ## laputan path
 from laputan.inout import fitsext, read_fits, write_fits
 from laputan.astrom import fixwcs
-from laputan.imaging import (improve, islice, icrop, iswarp, iconvolve,
-                              sextract, wclean, interfill, hextract, hswarp)
+from laputan.imaging import (improve, islice, icrop, iswarp,
+                             imontage, iconvolve, sextract,
+                             wclean, interfill, hextract, hswarp)
 
 print('\n TEST improve ')
 print('--------------')
@@ -49,22 +51,43 @@ crp = icrop(datdir+'M83', filOUT=outdir+'M83_icrop',
             dist='splitnorm', verbose=True)
 print('See out/M83_icrop.fits [Done]')
 
+print('\n TEST imontage ')
+print('---------------')
+mtg = imontage((datdir+'M82_09_L86', datdir+'M82_04_SL1'),
+               filREF=datdir+'M82_09_L86', fmod='ext',
+               tmpdir=outdir+'mtg/')
+mtg.make()
+mtg.reproject_mc(datdir+'M82_04_SL1', dist='norm', Nmc=0,
+                 filOUT=outdir+'M82_04_SL1_mtgrep')
+print('Reproject M82_04_SL1 to M82_09_L86 [Done]')
+# mtg.combine((datdir+'M82_04_SL1',datdir+'M82_06N_SL1'), dist='norm', Nmc=3,
+#             # do_rep=False,
+#             filOUT=outdir+'M82_SL1_mtgrep')
+mtg.coadd((datdir+'M82_04_SL1',datdir+'M82_06N_SL1'), dist='norm', Nmc=2,
+          filOUT=outdir+'M82_SL1_mtgrep')
+print('Reproject M82_04_SL1 & M82_06N_SL1 to M82_09_L86 [Done]')
+
 print('\n TEST iswarp ')
 print('-------------')
 hdr_ref = fixwcs(datdir+'M82_09_L86'+fitsext).header
 swp = iswarp(refheader=hdr_ref,
-             center=None, pixscale=6.,
              tmpdir=outdir+'swp/')
 swp.combine(datdir+'M82_08_L86', uncpdf='norm',
             filOUT=outdir+'M82_08_L86_rep', tmpdir=outdir+'swp/')
-print('Reproject M82_08_L86 to M82_09_L86 (pixscale=6") [Done]')
+print('Reproject M82_08_L86 to M82_09_L86 [Done]\n')
 
+# swp_cube = iswarp((datdir+'M82_09_L86', datdir+'M82_04_SL1'),
+#                   center='9:55:51,69:40:45', pixscale=6.,
+#                   tmpdir=outdir+'swp_cube/')
+# swp_cube.combine(datdir+'M82_04_SL1', uncpdf='norm',
+#                  filOUT=outdir+'M82_04_SL1_rep')
+# print('Reproject M82_04_SL1 (pixscale=6" recentered to M82 center) [Done]')
 swp_cube = iswarp((datdir+'M82_09_L86', datdir+'M82_04_SL1'),
-                  center='9:55:51,69:40:45', pixscale=None,
+                  refheader=hdr_ref,
                   tmpdir=outdir+'swp_cube/')
 swp_cube.combine(datdir+'M82_04_SL1', uncpdf='norm',
                  filOUT=outdir+'M82_04_SL1_rep')
-print('Reproject M82_04_SL1 to M82_09_L86 (recenter to M82 center) [Done]')
+print('Reproject M82_04_SL1 to M82_09_L86 [Done]')
 
 print('\n TEST iconvolve ')
 print('----------------')
@@ -127,6 +150,7 @@ hswp = hswarp(oldimage, oldheader, refheader, keepedge=True,
 print('See hswp/coadd.fits [Done]')
 
 if input('Clean tmp files (y/n): ')=='y':
+    mtg.clean()
     swp.clean()
     swp_cube.clean()
     conv_cube.clean()

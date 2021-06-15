@@ -13,7 +13,8 @@ import numpy as np
 
 def allist(allIN):
     '''
-    All (str, int, float, ndarray, list) input to list output
+    Convert any iterable to list object
+    worked for int, float, string, tuple, ndarray, list, dict, set, etc.
     '''
     if np.isscalar(allIN):
         listOUT = [allIN] # scalar (string, int, float, etc.)

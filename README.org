@@ -4,6 +4,8 @@
 * laputan
 LAPUTAN is +an inhabitant of a flying island in Swift's Gulliver's Travels characterized by a neglect of useful occupations and a devotion to visionary projects+ 
 the Library of Astronomical Python Utility Tool Annex
+
+[[./arx/laputa_sketch.jpg][Laputa]]
 * Helpdesk
 ** Installation
 #+BEGIN_SRC bash
@@ -17,11 +19,19 @@ pip install laputan --upgrade
 pip uninstall laputan
 #+END_SRC
 Anaconda's environment control is recommanded.
-** In order to access the full functionality, you will need the following dependencies:
+** In order to access the full functionality, you will need the following extra dependencies:
 - [[https://github.com/kxxdhdn/laputan/tree/master/idl][IDL]]
 - [[https://www.astromatic.net/software/swarp][SWarp]]
 - [[https://github.com/kxxdhdn/laputan/tree/master/swing][SwING]]
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@cea.fr
 * vlog = +Video blog+ Version LOG
+** v1.1 (20210615)
+- ~imaging.iswarp~
+  + Coadd refheader generator
+- ~imaging.imontage~
+  + Added coadd() with astropy reproject update (v0.4 \rarr v0.7.1)
+  + Added tests
+- ~__init__.py~
+  + Built a castle in the sky in the welcome banner
 ** v1.0 (20210610)
