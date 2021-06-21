@@ -26,11 +26,21 @@ Anaconda's environment control is recommanded.
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@cea.fr
 * vlog = +Video blog+ Version LOG
+** v1.1.1 (20210621)
+- Added ~imaging.respect~
+  + ~concat~ similar to ~imaging.concatenante~
+  + ~smooth~
+- ~imaging.concatenante~
+  + Modified input variables
+- ~imaging.iswarp~
+  + Added ~cropedge~ option to ~combine~
+- Added ~utilities.py~
+  + ~InputError~
 ** v1.1 (20210615)
 - ~imaging.iswarp~
   + Coadd refheader generator
-- ~imaging.imontage~
-  + Added coadd() with astropy reproject update (v0.4 \rarr v0.7.1)
+- Revisited ~imaging.imontage~
+  + Added ~coadd~ with astropy ~reproject~ update (v0.4 \rarr v0.7.1)
   + Added tests
 - ~__init__.py~
   + Built a castle in the sky in the welcome banner

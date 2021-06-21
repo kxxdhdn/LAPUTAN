@@ -21,7 +21,7 @@ sys.path.insert(0, testdir+'/..') ## laputan path
 from laputan.inout import fitsext, read_fits, write_fits
 from laputan.astrom import fixwcs
 from laputan.imaging import (improve, islice, icrop, iswarp,
-                             imontage, iconvolve, sextract,
+                             imontage, iconvolve, respect, sextract,
                              wclean, interfill, hextract, hswarp)
 
 print('\n TEST improve ')
@@ -86,8 +86,13 @@ swp_cube = iswarp((datdir+'M82_09_L86', datdir+'M82_04_SL1'),
                   refheader=hdr_ref,
                   tmpdir=outdir+'swp_cube/')
 swp_cube.combine(datdir+'M82_04_SL1', uncpdf='norm',
+                 # keepedge=True, cropedge=True,
                  filOUT=outdir+'M82_04_SL1_rep')
 print('Reproject M82_04_SL1 to M82_09_L86 [Done]')
+swp_cube.combine((datdir+'M82_04_SL1',datdir+'M82_06N_SL1'), uncpdf='norm',
+                 keepedge=True, cropedge=True,
+                 filOUT=outdir+'M82_SL1_rep')
+print('Reproject M82_04_SL1 & M82_06N_SL1 to M82_09_L86 [Done]')
 
 print('\n TEST iconvolve ')
 print('----------------')
@@ -119,6 +124,36 @@ print('Convolve M82_IRAC4 [Done]')
 
 print('\n TEST sextract ')
 print('---------------')
+
+print('\n TEST respect ')
+print('--------------')
+rsp = respect(tmpdir=outdir+'rsp')
+
+flist = [datdir+'M82_SL1', datdir+'M82_SL2']
+uncl = [f+'_unc' for f in flist]
+rsp.concat(flist, filOUT=outdir+'M82_SL_concat')
+wvl = rsp.wvl_concat
+data = rsp.im_concat[:,0,0]
+rsp.concat(uncl, filOUT=outdir+'M82_SL_concat_unc')
+unc = rsp.im_concat[:,0,0]
+plt.figure()
+plt.errorbar(wvl, data, unc, c='k', ecolor='r')
+plt.savefig(outdir+'M82_SL_concat')
+print('respect.concat M82_SL1 and M82_SL2 [Done]')
+
+plt.figure()
+data = read_fits(datdir+'M82').data[:,0,2]
+wvl = read_fits(datdir+'M82').wave
+unc = read_fits(datdir+'M82_unc').data[:,0,2]
+plt.errorbar(wvl, data, unc, c='k', ecolor='r', label='raw')
+data = rsp.smooth(datdir+'M82', filUNC=datdir+'M82_unc',
+                  wmin=2.5, wmax=5, lim_unc=1.e2, cmin=6, fltr_pn='n')[:,0,2]
+plt.errorbar(wvl, data, c='g', label='smoothed')
+plt.legend(loc='best')
+plt.xlim(2,6)
+plt.ylim(-10,20)
+plt.savefig(outdir+'M82_smooth')
+print('respect.smooth M82_SL_concat [Done]')
 
 print('\n TEST wclean ')
 print('-------------')

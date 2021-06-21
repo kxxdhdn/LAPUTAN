@@ -6,7 +6,8 @@
 Imaging
 
     improve:
-        rand_norm, rand_splitnorm, slice, slice_inv_sq, crop
+        uncestimate, rand_norm, rand_splitnorm, 
+        slice, slice_inv_sq, crop
     islice(improve):
         image, wave, filenames, clean
     icrop(improve):
@@ -19,6 +20,8 @@ Imaging
     iconvolve(improve):
         spitzer_irs, choker, do_conv, image, wave,
         filenames, clean
+    respect(improve):
+        concat, smooth, mask
     sextract(improve):
         rand_pointing, spec_build, sav_build, image, wave
     Jy_per_pix_to_MJy_per_sr, wmask, wclean, interfill,
@@ -39,6 +42,7 @@ from reproject.mosaicking import reproject_and_coadd
 import subprocess as SP
 
 ## Local
+from utilities import InputError
 from inout import (fitsext, csvext, ascext, fclean,
                    read_fits, write_fits, savext
                    # read_csv, write_csv, read_ascii,
@@ -93,12 +97,48 @@ class improve:
             else:
                 self.Nw = len(self.wvl)
 
-    def rand_norm(self, file=None, unc=None, sigma=1., mu=0.):
+    def uncestimate(self, filUNC=None, imbg=None, zerovalue=np.nan):
+        '''
+        Estimate uncertainties from the background map
+        So made unc map is homogenizing
+
+        ------ INPUT ------
+        filUNC              input uncertainty map (FITS)
+        imbg                background image used to generate homogenizing unc map
+        zerovalue           value used to replace zero value (Default:NaN)
+        ------ OUTPUT ------
+        unc                 estimated unc map
+        '''
+        if filUNC is not None:
+            unc = read_fits(filUNC).data
+        else:
+            if imbg is not None:
+                im = imbg
+                Nw, Ny, Nz = imbg.shape
+            else:
+                im = self.im
+                Nw = self.Nw
+                Ny = self.Ny
+                Nx = self.Nx
+                
+            unc = []
+            for w in range(Nw):
+                unc.append(np.nanstd(im[w,:,:]))
+            unc = np.array(unc)
+            unc[unc==0] = zerovalue
+            unc = np.repeat(unc[:,np.newaxis], Ny, axis=1)
+            unc = np.repeat(unc[:,:,np.newaxis], Nx, axis=2)
+
+        self.unc = unc
+
+        return unc
+
+    def rand_norm(self, filIN=None, unc=None, sigma=1., mu=0.):
         '''
         Add random N(0,1) noise
         '''
-        if file is not None:
-            unc = read_fits(file).data
+        if filIN is not None:
+            unc = read_fits(filIN).data
 
         if unc is not None:
             ## unc should have the same dimension with im
@@ -107,18 +147,18 @@ class improve:
 
         return self.im
 
-    def rand_splitnorm(self, file=None, unc=None, sigma=1., mu=0.):
+    def rand_splitnorm(self, filIN=None, unc=None, sigma=1., mu=0.):
         '''
         Add random SN(0,lam,lam*tau) noise
 
         ------ INPUT ------
-        file                2 FITS files for unc of left & right sides
+        filIN               2 FITS files for unc of left & right sides
         unc                 2 uncertainty ndarrays
         ------ OUTPUT ------
         '''
-        if file is not None:
+        if filIN is not None:
             unc = []
-            for f in file:
+            for f in filIN:
                 unc.append(read_fits(f).data)
             
         if unc is not None:
@@ -326,9 +366,9 @@ class islice(improve):
     def filenames(self):
         return self.slist
 
-    def clean(self, file=None):
-        if file is not None:
-            fclean(file)
+    def clean(self, filIN=None):
+        if filIN is not None:
+            fclean(filIN)
         else:
             fclean(self.filSL+'*')
 
@@ -362,7 +402,7 @@ class imontage(improve):
     i means <improve>-based or initialize
 
     ------ INPUT ------
-    file                FITS file (list, cf improve.filIN)
+    flist               FITS file (list, cf improve.filIN)
     filREF              ref file (priority if co-exist with input header)
     hdREF               ref header
     fmod                output image frame mode
@@ -373,7 +413,7 @@ class imontage(improve):
     tmpdir              tmp file path
     ------ OUTPUT ------
     '''
-    def __init__(self, file, filREF=None, hdREF=None,
+    def __init__(self, flist, filREF=None, hdREF=None,
                  fmod='ref', ext_pix=0, tmpdir=None):
         '''
         self: hdr_ref, path_tmp, 
@@ -389,7 +429,7 @@ class imontage(improve):
         self.path_tmp = path_tmp
 
         ## Inputs
-        self.file = allist(file)
+        self.flist = allist(flist)
         self.filREF = filREF
         self.hdREF = hdREF
         self.fmod = fmod
@@ -470,21 +510,21 @@ class imontage(improve):
         '''
         Preparation (make header)
         '''
-        file = self.file
+        flist = self.flist
         filREF = self.filREF
         hdREF = self.hdREF
         fmod = self.fmod
         ext_pix = self.ext_pix
 
-        if isinstance(file, str):
-            self.make_header(file, filREF, hdREF, fmod, ext_pix)
-        elif isinstance(file, list):
-            self.make_header(file[0], filREF, hdREF, fmod, ext_pix)
-            if fmod=='ext':
-                ## Refresh self.hdr_ref in every circle
-                for f in file:
-                    self.make_header(filIN=f, filREF=None,
-                                     hdREF=self.hdr_ref, fmod='ext', ext_pix=ext_pix)
+        # if isinstance(flist, str):
+        #     self.make_header(flist, filREF, hdREF, fmod, ext_pix)
+        # elif isinstance(flist, list):
+        self.make_header(flist[0], filREF, hdREF, fmod, ext_pix)
+        if fmod=='ext':
+            ## Refresh self.hdr_ref in every circle
+            for f in flist:
+                self.make_header(filIN=f, filREF=None,
+                                 hdREF=self.hdr_ref, fmod='ext', ext_pix=ext_pix)
         
         tqdm.write('<imontage> Making ref header...[done]')
 
@@ -526,7 +566,7 @@ class imontage(improve):
         if dist=='norm':
             self.rand_norm(filIN+'_unc')
         elif dist=='splitnorm':
-            self.rand_splitnorm([file[i]+'_unc_N', file[i]+'_unc_P'])
+            self.rand_splitnorm([filIN[i]+'_unc_N', filIN[i]+'_unc_P'])
         
         ## Set reprojection tmp path
         ##---------------------------
@@ -595,22 +635,22 @@ class imontage(improve):
 
         return dataset
 
-    def combine(self, file, filOUT=None, method='avg',
+    def combine(self, flist, filOUT=None, method='avg',
                 do_rep=True, Nmc=0, dist=None):
         '''
         Stitching input files (with the same wavelengths) to the ref WCS
 
         If Nmc==0, no MC
         '''
-        file = allist(file)
+        flist = allist(flist)
         dataset = type('', (), {})()
-        wvl = read_fits(file[0]).wave
+        wvl = read_fits(flist[0]).wave
         dataset.wvl = wvl
 
         superim0 = [] # [i,(w,)y,x]
         superunc = [] # [i,(w,)y,x]
         superim = [] # [i,j,(w,)y,x]
-        Nf = np.size(file)
+        Nf = np.size(flist)
         for i in trange(Nf, leave=False,
                         desc='<imontage> Reprojection (file level)'):
             ## (Re)do reprojection
@@ -618,20 +658,20 @@ class imontage(improve):
             if do_rep==True:
                 ## With MC
                 if Nmc>0:
-                    rep = self.reproject_mc(file[i], Nmc=Nmc, dist=dist)
+                    rep = self.reproject_mc(flist[i], Nmc=Nmc, dist=dist)
                     im0 = rep.im0
                     
                     superunc.append(rep.unc)
                     superim.append(rep.hyperim)
                 ## Without MC
                 else:
-                    im0 = self.reproject(file[i])                    
+                    im0 = self.reproject(flist[i])                    
                 superim0.append(im0)
 
             ## Read archives
             ##---------------
             else:
-                filename = os.path.basename(file[i])
+                filename = os.path.basename(flist[i])
                 file_rep = self.path_tmp+filename+'_rep'
                 if Nmc>0:
                     hyperim = [] # [j,(w,)y,x]
@@ -694,12 +734,12 @@ class imontage(improve):
         
         return dataset
 
-    def coadd(self, file, filOUT=None,
+    def coadd(self, flist, filOUT=None,
               Nmc=0, dist=None):
         '''
         Same function with combine() using reproject.reproject_and_coadd()
         '''
-        file = allist(file)
+        flist = allist(flist)
         dataset = type('', (), {})()
         comment = "Created by <imontage>"
 
@@ -707,7 +747,7 @@ class imontage(improve):
                         desc='<imontage> Coadd (MC)'):
             sl = []
             if j==0:
-                for f in file:
+                for f in flist:
                     super().__init__(f)
 
                     filename = os.path.basename(f)
@@ -717,7 +757,7 @@ class imontage(improve):
                     sl.append(self.slice(coadd_tmp+'slice', ext=fitsext))
                 slist = [np.array(sl)]
             else:
-                for f in file:
+                for f in flist:
                     super().__init__(f)
 
                     filename = os.path.basename(f)
@@ -770,9 +810,9 @@ class imontage(improve):
         
         return dataset
 
-    def clean(self, file=None):
-        if file is not None:
-            fclean(file)
+    def clean(self, filIN=None):
+        if filIN is not None:
+            fclean(filIN)
         else:
             fclean(self.path_tmp)
 
@@ -780,10 +820,10 @@ class iswarp(improve):
     '''
     SWarp drop-in image montage toolkit
     i means <improve>-based
-    In competetion with its fully Python-based twin <imontage>
+    Alternative to its fully Python-based twin <imontage>
 
     ------ INPUT ------
-    file                ref FITS files used to make header (footprint)
+    flist               ref FITS files used to make header (footprint)
     refheader           scaling matrix adopted if co-exist with file
     center              center of output image frame
                           None - contains all input fields
@@ -801,7 +841,7 @@ class iswarp(improve):
      one must write a coadd.head ASCII file that contains 
      a custom anisotropic scaling matrix. "
     '''
-    def __init__(self, file=None, refheader=None,
+    def __init__(self, flist=None, refheader=None,
                  center=None, pixscale=None, 
                  verbose=False, tmpdir=None):
         '''
@@ -827,7 +867,7 @@ class iswarp(improve):
 
         fclean(path_tmp+'coadd*') # remove previous coadd.fits/.head
 
-        if file is None:
+        if flist is None:
             if refheader is None:
                 raise ValueError('No input!')
             
@@ -839,18 +879,18 @@ class iswarp(improve):
                 self.refheader = refheader
         else:
             ## Input files in list object
-            file = allist(file)
+            flist = allist(flist)
                 
             ## Images
             image_files = ' '
             list_ref = []
-            for i in range(len(file)):
-                image = read_fits(file[i]).data
-                hdr = fixwcs(file[i]+fitsext).header
-                file_ref = file[i]
+            for i in range(len(flist)):
+                image = read_fits(flist[i]).data
+                hdr = fixwcs(flist[i]+fitsext).header
+                file_ref = flist[i]
                 if image.ndim==3:
                     ## Extract 1st frame of the cube
-                    file_ref = path_tmp+os.path.basename(file[i])+'_ref'
+                    file_ref = path_tmp+os.path.basename(flist[i])+'_ref'
                     write_fits(file_ref, hdr, image[0])
                 
                 image_files += file_ref+fitsext+' ' # SWarp input str
@@ -931,18 +971,20 @@ class iswarp(improve):
 
         return im_fp
 
-    def combine(self, file, combtype='med',
-                keepedge=False, uncpdf=None, filOUT=None, tmpdir=None):
+    def combine(self, flist, combtype='med',
+                keepedge=False, cropedge=True,
+                uncpdf=None, filOUT=None, tmpdir=None):
         '''
         Combine 
 
         ------ INPUT ------
-        file                input FITS files should have the same wvl
+        flist               input FITS files should have the same wvl
         combtype            combine type
                               med - median
                               avg - average
                               wgt_avg - inverse variance weighted average
         keepedge            default: False
+        cropedge            crop the NaN edge of the frame
         uncpdf              add uncertainties (filename+'_unc.fits' needed)
         filOUT              output FITS file
         ------ OUTPUT ------
@@ -962,7 +1004,7 @@ class iswarp(improve):
             os.makedirs(path_comb)
 
         ## Input files in list format
-        file = allist(file)
+        flist = allist(flist)
         
         ## Header
         ##--------
@@ -971,12 +1013,12 @@ class iswarp(improve):
 
         ## Images and weights
         ##--------------------
-        Nf = len(file)
+        Nf = len(flist)
         
-        imshape = read_fits(file[0]).data.shape
+        imshape = read_fits(flist[0]).data.shape
         if len(imshape)==3:
             Nw = imshape[0]
-            wvl = read_fits(file[0]).wave
+            wvl = read_fits(flist[0]).wave
         else:
             Nw = 1
             wvl = None
@@ -985,20 +1027,20 @@ class iswarp(improve):
         imlist = []
         wgtlist = []
         for i in range(Nf):
-            filename = os.path.basename(file[i])
+            filename = os.path.basename(flist[i])
             ## Set slice file
             file_slice = path_comb+filename
             
             ## Slice
-            super().__init__(file[i])
+            super().__init__(flist[i])
             if uncpdf=='norm':
-                self.rand_norm(file[i]+'_unc')
+                self.rand_norm(flist[i]+'_unc')
             elif uncpdf=='splitnorm':
-                self.rand_splitnorm([file[i]+'_unc_N', file[i]+'_unc_P'])
+                self.rand_splitnorm([flist[i]+'_unc_N', flist[i]+'_unc_P'])
             imlist.append(self.slice(file_slice, ''))
             
             if combtype=='wgt_avg':
-                super().__init__(file[i]+'_unc')
+                super().__init__(flist[i]+'_unc')
                 wgtlist.append(self.slice_inv_sq(file_slice, '.weight'))
 
         ## Build image_files & weight_files (size=Nw)
@@ -1078,7 +1120,7 @@ class iswarp(improve):
             ## Astrometric flux-rescaling based on the local ratio of pixel scale
             ## Complementary for lack of FITS kw 'FLXSCALE'
             ## Because SWarp is conserving surface brightness/pixel
-            oldcdelt = get_pc(wcs=fixwcs(file[i]+fitsext).wcs).cdelt
+            oldcdelt = get_pc(wcs=fixwcs(flist[i]+fitsext).wcs).cdelt
             newcdelt = get_pc(wcs=fixwcs(path_tmp+'coadd'+fitsext).wcs).cdelt
             old_pixel_fov = abs(oldcdelt[0]*oldcdelt[1])
             new_pixel_fov = abs(newcdelt[0]*newcdelt[1])
@@ -1093,6 +1135,34 @@ class iswarp(improve):
             hyperimage.append(newimage)
 
         hyperimage = np.array(hyperimage)
+
+        if cropedge:
+            ## coadd.ref.fits here is 3D, different from that created by SWarp
+            write_fits(path_tmp+'coadd.ref', newheader, hyperimage, wvl)
+            
+            reframe = improve(path_tmp+'coadd.ref')
+            xlist = []
+            for x in range(reframe.Nx):
+                if not np.isnan(reframe.im[:,:,x]).all():
+                    xlist.append(x)
+            ylist = []
+            for y in range(reframe.Ny):
+                if not np.isnan(reframe.im[:,y,:]).all():
+                    ylist.append(y)
+            xmin = min(xlist)
+            xmax = max(xlist)+1
+            ymin = min(ylist)
+            ymax = max(ylist)+1
+            dx = xmax-xmin
+            dy = ymax-ymin
+            x0 = xmin+dx/2
+            y0 = ymin+dy/2
+
+            reframe.crop(filOUT=path_tmp+'coadd.ref',
+                         sizpix=(dx,dy), cenpix=(x0,y0))
+            newheader = reframe.hdr
+            hyperimage = reframe.im
+            
         if filOUT is not None:
             write_fits(filOUT, newheader, hyperimage, wvl)
 
@@ -1102,9 +1172,9 @@ class iswarp(improve):
 
         return ds
 
-    def clean(self, file=None):
-        if file is not None:
-            fclean(file)
+    def clean(self, filIN=None):
+        if filIN is not None:
+            fclean(filIN)
         else:
             fclean(self.path_tmp)
 
@@ -1175,17 +1245,25 @@ class iconvolve(improve):
         sigma_per = fwhm_per / (2. * np.sqrt(2.*np.log(2.)))
         self.sigma_lam = np.sqrt(sigma_par * sigma_per)
         
-    # def choker(self, file):
+    # def choker(self, flist):
+    #     '''
+    #     ------ INPUT ------
+    #     flist               FITS files to be convolved
+    #     ------ OUTPUT ------
+    #     '''
+    #     ## Input files in list format
+    #     flist = allist(flist)
+        
     #     ## CHOose KERnel(s)
     #     lst = []
-    #     for i, image in enumerate(file):
+    #     for i, image in enumerate(flist):
     #         ## check PSF profil (or is not a cube)
     #         if self.sigma_lam is not None:
-    #             image = file[i]
+    #             image = flist[i]
     #             ind = closest(self.psf, self.sigma_lam[i])
     #             kernel = self.kfile[ind]
     #         else:
-    #             image = file[0]
+    #             image = flist[0]
     #             kernel = self.kfile[0]
     #         ## lst line elements: image, kernel
     #         k = [image, kernel]
@@ -1194,18 +1272,26 @@ class iconvolve(improve):
     #     ## write csv file
     #     write_csv(self.klist, header=['Images', 'Kernels'], dset=lst)
 
-    def choker(self, file):
+    def choker(self, flist):
+        '''
+        ------ INPUT ------
+        flist               FITS files to be convolved
+        ------ OUTPUT ------
+        '''
+        ## Input files in list format
+        flist = allist(flist)
+        
         ## CHOose KERnel(s)
         image = []
         kernel = []
-        for i, filim in enumerate(file):
+        for i, filim in enumerate(flist):
             ## check PSF profil (or is not a cube)
             if self.sigma_lam is not None:
                 image.append(filim)
                 ind = closest(self.psf, self.sigma_lam[i])
                 kernel.append(self.kfile[ind])
             else:
-                image.append(file[0])
+                image.append(flist[0])
                 kernel.append(self.kfile[0])
 
         ## write csv file
@@ -1270,13 +1356,185 @@ class iconvolve(improve):
     def filenames(self):
         return self.slist
 
-    def clean(self, file=None):
-        if file is not None:
-            fclean(file)
+    def clean(self, filIN=None):
+        if filIN is not None:
+            fclean(filIN)
         else:
             if self.path_conv is not None:
                 fclean(self.path_conv)
 
+class respect(improve):
+    '''
+    REstore SPECTra
+    '''
+    def __init__(self, verbose=False, tmpdir=None):
+        '''
+        self: path_tmp, verbose
+        (filIN, wmod, hdr, w, Ndim, Nx, Ny, Nw, im, wvl)
+        '''
+        if verbose==False:
+            devnull = open(os.devnull, 'w')
+        else:
+            devnull = None
+        self.verbose = verbose
+        self.devnull = devnull
+        
+        ## Set path of tmp files
+        if tmpdir is None:
+            path_tmp = os.getcwd()+'/tmp_rsp/'
+        else:
+            path_tmp = tmpdir
+        if not os.path.exists(path_tmp):
+            os.makedirs(path_tmp)
+        
+        self.path_tmp = path_tmp
+
+    def concat(self, flist, filOUT=None, comment=None,
+               wsort=False, wrange=None):
+        '''
+        wsort=True can be used with wclean
+
+        '''
+        if wrange is None:
+            wrange = [ (2.50, 5.00), # irc
+                       (5.21, 7.56), # sl2
+                       (7.57, 14.28), # sl1
+                       (14.29, 20.66), # ll2
+                       (20.67, 38.00), ] # ll1
+        wmin = []
+        wmax = []
+        for i in range(len(wrange)):
+            wmin.append(wrange[i][0])
+            wmax.append(wrange[i][1])
+        
+        ## Read data
+        wave = []
+        data = []
+        
+        ## Keep all wavelengths and sort them in ascending order
+        if wsort==True:
+            for f in flist:
+                super().__init__(f)
+                data.append(self.im)
+                wave.append(self.wvl)
+        ## Keep wavelengths in the given ranges (wrange)
+        else:
+            for f in flist:
+                super().__init__(f)
+                imin = closest(wmin, self.wvl[0])
+                imax = closest(wmax, self.wvl[-1])
+                iwi = 0
+                iws = -1
+                for i, w in enumerate(self.wvl):
+                    if w<wrange[imin][0] and self.wvl[i+1]>wrange[imin][0]:
+                        iwi = i+1
+                    if w<wrange[imax][1] and self.wvl[i+1]>wrange[imax][0]:
+                        iws = i
+                data.append(self.im[iwi:iws])
+                wave.append(self.wvl[iwi:iws])
+
+        data = np.concatenate(data)
+        wave = np.concatenate(wave)
+        hdr = self.hdr
+        ind = sorted(range(len(wave)), key=wave.__getitem__)
+        wave = np.sort(wave)
+        data = data[ind]
+        self.wvl_concat = wave
+        self.im_concat = data
+
+        ## Write FITS file
+        if filOUT is not None:
+            write_fits(filOUT, hdr, data, wave, COMMENT=comment)
+
+    def smooth(self, filIN, filUNC=None, imbg=None, zerovalue=np.nan,
+               wmin=None, wmax=None, lim_unc=1.e2, fltr_pn=None, cmin=5,
+               filOUT=None):
+        '''
+        Remove spectral artifacts (Interpolate aberrant wavelengths)
+        Anormaly if:
+          abs(v - v_med) / unc > lim_unc
+
+        ------ INPUT ------
+        filIN               input spectral map (FITS)
+        filUNC              input uncertainty map (FITS)
+        filOUT              output smoothed spectral map (FITS)
+        imbg                background image used to generate homogenizing unc map
+        zerovalue           value used to replace zero value (Default:NaN)
+        wmin                wavelength range to smooth (float)
+        wmax                wavelength range to smooth (float)
+        lim_unc             uncertainty dependant factor limit (positive float)
+        fltr_pn             positive/negtive filter (Default: None)
+                              'p' - smooth only positive aberrant
+                              'n' - smooth only negtive aberrant
+        cmin                minimum neighboring artifacts
+        ------ OUTPUT ------
+        im                  smoothed spectral map
+        '''
+        super().__init__(filIN)
+
+        im = self.im
+        wvl = self.wvl
+        unc = self.uncestimate(filUNC,imbg,zerovalue)
+
+        if wmin is None:
+            wmin = wvl[0]
+        iwi = allist(wvl).index(wvl[closest(wvl,wmin)])
+        if wmax is None:
+            wmax = wvl[-1]
+        iws = allist(wvl).index(wvl[closest(wvl,wmax)])
+
+        if lim_unc<0:
+            raise ValueError('lim_unc must be positive!')
+
+        ## Scan every pixel/spectrum at each wavelength
+        for w in trange(self.Nw, leave=False,
+                        desc='<respect> smooth spectral map'):
+            if w>=iwi and w<=iws:
+                pix_x = []
+                pix_y = []
+                for y in range(self.Ny):
+                    for x in range(self.Nx):
+                        v_med = np.median(im[iwi:iws,y,x])
+                        dv = (im[w,y,x] - v_med) / unc[w,y,x]
+                        if fltr_pn is None or fltr_pn=='p':
+                            if dv > lim_unc:
+                                pix_x.append(x)
+                                pix_y.append(y)
+                        if fltr_pn is None or fltr_pn=='n':
+                            if dv < -lim_unc:
+                                pix_x.append(x)
+                                pix_y.append(y)
+                pix_x = np.array(pix_x)
+                pix_y = np.array(pix_y)
+                
+                ## If the neighbors share the feature, not an artifact
+                for ix, x in enumerate(pix_x):
+                    counter = 0
+                    for iy, y in enumerate(pix_y):
+                        if abs(y-pix_y[ix]+pix_x[iy]-x)<=2:
+                            counter += 1
+                    ## max(counter) == 12
+                    if counter<cmin:
+                        if w==0:
+                            im[w,pix_y[ix],x] = im[w+1,pix_y[ix],x]
+                        elif w==self.Nw-1:
+                            im[w,pix_y[ix],x] = im[w-1,pix_y[ix],x]
+                        else:
+                            im[w,pix_y[ix],x] = (im[w-1,pix_y[ix],x]+im[w+1,pix_y[ix],x])/2
+                            # im[w,pix_y[ix],x] = np.median(im[iwi:iws,pix_y[ix],x])
+
+        if filOUT is not None:
+            comment = "A <respect> smoothed spectral map"
+            write_fits(filOUT, self.hdr, im, wvl,
+                       COMMENT=comment)
+
+        return im
+            
+    def mask(self):
+        '''
+        '''
+        pass
+        
 class sextract(improve):
     '''
     AKARI/IRC spectroscopy slit coord extraction
@@ -1485,7 +1743,7 @@ def wmask(filIN, filOUT=None):
 def wclean(filIN, cmod='eq', cfile=None,
            wmod=0, filOUT=None, verbose=False):
     '''
-    CLEAN Wavelengths
+    CLEAN Wavelengths, alternative to the wrange option of concatenate()
 
     --- INPUT ---
     filIN       input fits file
@@ -1821,47 +2079,37 @@ def hswarp(oldimage, oldheader, refheader,
 
     return ds
 
-def concatenate(flist, filOUT=None, comment=None, sort_wave=False):
+def concatenate(flist, filOUT=None, comment=None,
+                wsort=False, wrange=None):
     '''
+    wsort=True can be used with wclean
 
     '''
     dataset = type('', (), {})()
 
-    wrange = [ (2.50, 5.00), # irc
-               (5.21, 7.56), # sl2
-               (7.57, 14.28), # sl1
-               (14.29, 20.66), # ll2
-               (20.67, 38.00), ] # ll1
+    if wrange is None:
+        wrange = [ (2.50, 5.00), # irc
+                   (5.21, 7.56), # sl2
+                   (7.57, 14.28), # sl1
+                   (14.29, 20.66), # ll2
+                   (20.67, 38.00), ] # ll1
     wmin = []
-    wmin.append(wrange[0][0])
-    wmin.append(wrange[1][0])
-    wmin.append(wrange[2][0])
-    wmin.append(wrange[3][0])
-    wmin.append(wrange[4][0])
     wmax = []
-    wmax.append(wrange[0][1])
-    wmax.append(wrange[1][1])
-    wmax.append(wrange[2][1])
-    wmax.append(wrange[3][1])
-    wmax.append(wrange[4][1])
+    for i in range(len(wrange)):
+        wmin.append(wrange[i][0])
+        wmax.append(wrange[i][1])
     
     ## Read data
     wave = []
     data = []
 
     ## Keep all wavelengths and sort them in ascending order
-    if sort_wave==True:
+    if wsort==True:
         for f in flist:
             ds = read_fits(f)
             data.append(ds.data)
             wave.append(ds.wave)
-        data = np.concatenate(data)
-        wave = np.concatenate(wave)
-        hdr = ds.header
-        ind = sorted(range(len(wave)), key=wave.__getitem__)
-        wave = np.sort(wave)
-        data = data[ind]
-    ## Keep wavelengths according to given ranges
+    ## Keep wavelengths in the given ranges (wrange)
     else:
         for f in flist:
             ds = read_fits(f)
@@ -1871,18 +2119,20 @@ def concatenate(flist, filOUT=None, comment=None, sort_wave=False):
             iws = -1
             for i, w in enumerate(ds.wave):
                 if w<wrange[imin][0] and ds.wave[i+1]>wrange[imin][0]:
-                    iwi = i
+                    iwi = i+1
                 if w<wrange[imax][1] and ds.wave[i+1]>wrange[imax][0]:
                     iws = i
             data.append(ds.data[iwi:iws])
             wave.append(ds.wave[iwi:iws])
-        data = np.concatenate(data)
-        wave = np.concatenate(wave)
-        hdr = ds.header
-                    
-    ## Save data
-    dataset.data = data
+
+    data = np.concatenate(data)
+    wave = np.concatenate(wave)
+    hdr = ds.header    
+    ind = sorted(range(len(wave)), key=wave.__getitem__)
+    wave = np.sort(wave)
+    data = data[ind]
     dataset.wave = wave
+    dataset.data = data
 
     ## Write FITS file
     if filOUT is not None:

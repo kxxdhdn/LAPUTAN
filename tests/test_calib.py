@@ -31,8 +31,9 @@ print('wcen = ', sp1.wcen)
 print('smat = ', sp1.smat)
 
 print('* via data array *')
+x,y = 2,0
 with fits.open(datdir+'M82.fits') as hdul:
-    spec = hdul[0].data[:,34,40]
+    spec = hdul[0].data[:,y,x]
     wave = hdul[1].data
 c2 = intercalib()
 sp2 = c2.synthetic_photometry('IRAC3', wave, spec, verbose=False)
@@ -57,10 +58,10 @@ ax1, ax2 = axes
 print('* via FITS file *')
 new_spec11 = c1.specorrect(a1, b1, wlim=wlim11)
 new_spec12 = c1.specorrect(a2, b2, wlim=wlim12)
-ax1.plot(c1.wvl, c1.im[:,34,40], c='k', label='y')
-ax1.plot(c1.wvl, new_spec11[:,34,40], c='y',
+ax1.plot(c1.wvl, c1.im[:,y,x], c='k', label='y')
+ax1.plot(c1.wvl, new_spec11[:,y,x], c='y',
          label='{}*y+{}, x=({},{})'.format(a1,b1,wlim11[0],wlim11[1]))
-ax1.plot(c1.wvl, new_spec12[:,34,40], c='g',
+ax1.plot(c1.wvl, new_spec12[:,y,x], c='g',
          label='{}*y+{}, x=({},{})'.format(a2,b2,wlim12[0],wlim12[1]))
 ax1.legend(loc='upper left')
 
