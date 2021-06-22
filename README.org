@@ -26,6 +26,9 @@ Anaconda's environment control is recommanded.
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@cea.fr
 * vlog = +Video blog+ Version LOG
+** v1.1.3 (20210623)
+- ~imaging.improve~
+  + Corrected ~rebin~ 3D FITS writing (lack of wavelength HDU)
 ** v1.1.2 (20210622)
 - ~imaging.sextract~
   + Now ~spec_build~ allows to define slit width with ~Nx~ option

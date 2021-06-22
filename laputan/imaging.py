@@ -323,7 +323,7 @@ class improve:
 
         return self.im
 
-    def rebin(self, filOUT, pixscale):
+    def rebin(self, filOUT=None, pixscale=None):
         '''
         Shrink or expand the size of an array an arbitrary amount 
         using interpolation
@@ -347,13 +347,22 @@ class improve:
         # cd = w.pixel_scale_matrix
         oldcd = self.cd
         cdelt = self.cdelt
-        pixscale = pixscale / 3600. # convert arcsec to degree
-        xratio = math.ceil(pixscale / abs(cdelt[0])) # Expansion or contraction in X
-        yratio = math.ceil(pixscale / abs(cdelt[1])) # Expansion or contraction in Y
-        print('The actual (rounded) pixel scale of x axis is {} arcsec'.format(
-            abs(cdelt[0])*xratio*3600))
-        print('The actual (rounded) pixel scale of y axis is {} arcsec'.format(
-            abs(cdelt[1])*yratio*3600))
+        
+        if pixscale is not None:
+            pixscale = pixscale / 3600. # convert arcsec to degree
+            xratio = math.ceil(pixscale / abs(cdelt[0])) # Expansion or contraction in X
+            yratio = math.ceil(pixscale / abs(cdelt[1])) # Expansion or contraction in Y
+        else:
+            xratio = 1
+            yratio = 1
+        if self.verbose==True:
+            print('----------')
+            print('The actual (rounded) pixel scale of x axis is {} arcsec'.format(
+                abs(cdelt[0])*xratio*3600))
+            print('The actual (rounded) pixel scale of y axis is {} arcsec'.format(
+                abs(cdelt[1])*yratio*3600))
+            print('----------')
+            
         # lam = yratio/xratio
         # pix_ratio = xratio*yratio
         Nx = math.ceil(self.Nx / xratio)
@@ -416,8 +425,9 @@ class improve:
                 del hdr[kw]
             if 'CDELT' in kw:
                 del hdr[kw]
-        
-        write_fits(filOUT, hdr, newimage)
+
+        if filOUT is not None:
+            write_fits(filOUT, hdr, newimage, self.wvl, self.wmod)
 
         self.hdr = hdr
         self.im = newimage
