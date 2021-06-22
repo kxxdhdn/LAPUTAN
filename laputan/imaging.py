@@ -7,11 +7,13 @@ Imaging
 
     improve:
         uncestimate, rand_norm, rand_splitnorm, 
-        slice, slice_inv_sq, crop
+        slice, slice_inv_sq, crop, rebin
     islice(improve):
         image, wave, filenames, clean
     icrop(improve):
-        image, wave
+        header, image, wave
+    irebin(improve):
+        header, image, wave
     imontage(improve):
         make_header, make, footprint, reproject, reproject_mc,
         combine, coadd, clean
@@ -23,7 +25,8 @@ Imaging
     respect(improve):
         concat, smooth, mask
     sextract(improve):
-        rand_pointing, spec_build, sav_build, image, wave
+        rand_pointing, spec_build, sav_build,
+        header, image, wave
     Jy_per_pix_to_MJy_per_sr, wmask, wclean, interfill,
     hextract, hswarp, concatenante, 
 
@@ -236,6 +239,8 @@ class improve:
              sizpix=None, cenpix=None, sizval=None, cenval=None):
         '''
         If pix and val co-exist, pix will be taken.
+        Note that some self variables such as cdelt are
+        not renewed...idem. for rebin
 
         ------ INPUT ------
         filOUT              output file
@@ -318,6 +323,107 @@ class improve:
 
         return self.im
 
+    def rebin(self, filOUT, pixscale):
+        '''
+        Shrink or expand the size of an array an arbitrary amount 
+        using interpolation
+        Note that the actual version collimates on zero point,
+        it does not conserve flux on upper right edges
+        if not integer multiplication!
+        [REF] IDL lib hrebin/frebin
+        https://idlastro.gsfc.nasa.gov/ftp/pro/astrom/hrebin.pro
+        https://github.com/wlandsman/IDLAstro/blob/master/pro/frebin.pro
+
+        ------ INPUT ------
+        filOUT              output file
+        pixscale            output pixel scale in arcsec
+        ------ OUTPUT ------
+        newimage            rebinned image array
+        '''
+        oldimage = self.im
+        hdr = self.hdr
+        header = hdr.copy()
+        oldw = self.w
+        # cd = w.pixel_scale_matrix
+        oldcd = self.cd
+        cdelt = self.cdelt
+        pixscale = pixscale / 3600. # convert arcsec to degree
+        xratio = math.ceil(pixscale / abs(cdelt[0])) # Expansion or contraction in X
+        yratio = math.ceil(pixscale / abs(cdelt[1])) # Expansion or contraction in Y
+        print('The actual (rounded) pixel scale of x axis is {} arcsec'.format(
+            abs(cdelt[0])*xratio*3600))
+        print('The actual (rounded) pixel scale of y axis is {} arcsec'.format(
+            abs(cdelt[1])*yratio*3600))
+        # lam = yratio/xratio
+        # pix_ratio = xratio*yratio
+        Nx = math.ceil(self.Nx / xratio)
+        Ny = math.ceil(self.Ny / yratio)
+    
+        ## Rebin
+        ##-------
+        if xratio<1:
+            newimage = np.repeat(oldimage, Nx/self.Nx, axis=2)
+        else:
+            x_edge = Nx*xratio-self.Nx
+            # x_after = math.ceil(x_edge / 2)
+            # x_before = x_edge - x_after
+            if self.Ndim==3:
+                # npad is a tuple of (n_before, n_after) for each dimension
+                xpad = ((0,0), (0,0), (0, x_edge))
+                newimage = np.pad(oldimage, pad_width=xpad,
+                                  mode='constant', constant_values=np.nan)
+                newimage = newimage.reshape((self.Nw,self.Ny,Nx,xratio)).mean(3)
+            else:
+                xpad = ((0,0), (0, x_edge))
+                newimage = np.pad(oldimage, pad_width=xpad,
+                                  mode='constant', constant_values=np.nan)
+                newimage = newimage.reshape((self.Ny,Nx,xratio)).mean(2)
+        if yratio<1:
+            newimage = np.repeat(newimage, Ny/self.Ny, axis=1)
+        else:
+            y_edge = Ny*yratio-self.Ny
+            # y_after = math.ceil(y_edge / 2)
+            # y_before = y_edge - y_after
+            if self.Ndim==3:
+                ypad = ((0,0), (0, y_edge), (0,0))
+                newimage = np.pad(newimage, pad_width=ypad,
+                                  mode='constant', constant_values=np.nan)
+                newimage = newimage.reshape((self.Nw,Ny,yratio,Nx)).mean(2)
+            else:
+                ypad = ((0, y_edge), (0,0))
+                newimage = np.pad(newimage, pad_width=ypad,
+                                  mode='constant', constant_values=np.nan)
+                newimage = newimage.reshape((Ny,yratio,Nx)).mean(1)
+                
+        ## Modify header
+        ##---------------
+        zval = oldw.all_pix2world(np.array([[0.5,0.5]]), 1)[0]
+        # hdr['NAXIS1'] = Nx
+        # hdr['NAXIS2'] = Ny
+        hdr['CRPIX1'] = 0.5
+        hdr['CRPIX2'] = 0.5
+        hdr['CRVAL1'] = zval[0]
+        hdr['CRVAL2'] = zval[1]
+    
+        cd = oldcd * [xratio,yratio]
+        hdr['CD1_1'] = cd[0][0]
+        hdr['CD2_1'] = cd[1][0]
+        hdr['CD1_2'] = cd[0][1]
+        hdr['CD2_2'] = cd[1][1]
+    
+        for kw in header.keys():
+            if 'PC' in kw:
+                del hdr[kw]
+            if 'CDELT' in kw:
+                del hdr[kw]
+        
+        write_fits(filOUT, hdr, newimage)
+
+        self.hdr = hdr
+        self.im = newimage
+    
+        return newimage
+    
 class islice(improve):
     '''
     Slice a cube
@@ -335,7 +441,7 @@ class islice(improve):
     self: slist, path_tmp, 
           (filIN, wmod, hdr, w, cdelt, pc, cd, Ndim, Nx, Ny, Nw, im, wvl)
     '''
-    def __init__(self, filIN, filSL=None, filUNC=None, dist='norm',
+    def __init__(self, filIN, filSL=None, filUNC=None, dist=None,
                  slicetype=None, postfix=''):
         super().__init__(filIN)
 
@@ -378,7 +484,7 @@ class icrop(improve):
     '''
     def __init__(self, filIN, filOUT=None,
                  sizpix=None, cenpix=None, sizval=None, cenval=None,
-                 filUNC=None, dist='norm', wmod=0, verbose=False):
+                 filUNC=None, dist=None, wmod=0, verbose=False):
         ## slicrop: slice 
         super().__init__(filIN, wmod, verbose)
         
@@ -390,12 +496,40 @@ class icrop(improve):
         im_crop = self.crop(filOUT=filOUT, sizpix=sizpix, cenpix=cenpix,
                             sizval=sizval, cenval=cenval) # gauss_noise inclu
 
+    def header(self):
+        return self.hdr
+    
     def image(self):
         return self.im
 
     def wave(self):
         return self.wvl
 
+class irebin(improve):
+    '''
+    REBIN 2D image or 3D cube
+    '''
+    def __init__(self, filIN, filOUT=None,
+                 pixscale=None,
+                 filUNC=None, dist=None, wmod=0, verbose=False):
+        super().__init__(filIN, wmod, verbose)
+        
+        if dist=='norm':
+            self.rand_norm(filUNC)
+        elif dist=='splitnorm':
+            self.rand_splitnorm(filUNC)
+
+        im_rebin = self.rebin(filOUT=filOUT, pixscale=pixscale)
+
+    def header(self):
+        return self.hdr
+        
+    def image(self):
+        return self.im
+
+    def wave(self):
+        return self.wvl
+        
 class imontage(improve):
     '''
     2D image or 3D cube montage toolkit
@@ -497,7 +631,7 @@ class imontage(improve):
             self.hdr_ref = hdREF
 
             ## Test hdREF (Quick check: old=new or old<new)
-            # w_new = fixwcs(header=hdREF+fitsext).wcs
+            # w_new = fixwcs(header=hdREF).wcs
             # print('old: ', w.all_world2pix(
             #     self.hdr['CRVAL1'], self.hdr['CRVAL2'], 1))
             # print('new: ', w_new.all_world2pix(
@@ -869,7 +1003,7 @@ class iswarp(improve):
 
         if flist is None:
             if refheader is None:
-                raise ValueError('No input!')
+                raise InputError('<iswarp>','No input!')
             
             ## Define coadd frame via refheader
             else:
@@ -1194,7 +1328,7 @@ class iconvolve(improve):
     ------ OUTPUT ------
     '''
     def __init__(self, filIN, kfile, klist,
-                 filUNC=None, dist='norm', psf=None, convdir=None, filOUT=None):
+                 filUNC=None, dist=None, psf=None, convdir=None, filOUT=None):
         ## INPUTS
         super().__init__(filIN)
         
@@ -1380,14 +1514,14 @@ class respect(improve):
         self.devnull = devnull
         
         ## Set path of tmp files
-        if tmpdir is None:
-            path_tmp = os.getcwd()+'/tmp_rsp/'
-        else:
-            path_tmp = tmpdir
-        if not os.path.exists(path_tmp):
-            os.makedirs(path_tmp)
+        # if tmpdir is None:
+        #     path_tmp = os.getcwd()+'/tmp_rsp/'
+        # else:
+        #     path_tmp = tmpdir
+        # if not os.path.exists(path_tmp):
+        #     os.makedirs(path_tmp)
         
-        self.path_tmp = path_tmp
+        # self.path_tmp = path_tmp
 
     def concat(self, flist, filOUT=None, comment=None,
                wsort=False, wrange=None):
@@ -1581,23 +1715,27 @@ class sextract(improve):
         ------ OUTPUT ------
         '''
         d_ro = abs(np.random.normal(0., sigma)) # N(0,sigma)
-        d_phi = np.random.random() *2. * np.pi # U(0,2pi)
+        d_phi = np.random.random() *2. * np.pi # U(0,2*pi)
         self.hdr['CRVAL1'] += d_ro * np.cos(d_phi)
         self.hdr['CRVAL2'] += d_ro * np.sin(d_phi)
 
         return d_ro, d_phi
 
-    def spec_build(self, filOUT=None, write_unc=True, Ny=32, Nsub=1, sig_pt=0.):
+    def spec_build(self, filOUT=None, write_unc=True,
+                   Nx=0, Ny=32, Nsub=1, sig_pt=0.):
         '''
         Build the spectral cube/slit from spectra extracted by IDL pipeline
         (see IRC_SPEC_TOOL, plot_spec_with_image)
 
         ------ INPUT ------
+        Nx                  number of (identical) pixels to fit slit width
+                              Default: 0, 3 for Ns and 2 for Nh
         Ny                  number of pixels in spatial direction (Max=32)
                               Y axis in N3 frame (X axis in focal plane arrays)
         Nsub                number of subslits
         '''
-        Nx = self.slit_width
+        if Nx==0:
+            Nx = self.slit_width
         ref_x = self.table['image_y'][0] # slit ref x
         ref_y = 512 - self.table['image_x'][0] # slit ref y
 
@@ -1703,6 +1841,9 @@ class sextract(improve):
                     cube[k][j][i] = image[k][j]
                     unc[k][j][i] = noise[k][j]
 
+    def header(self):
+        return self.hdr
+    
     def image(self):
         return self.cube
 
@@ -1948,8 +2089,7 @@ def interfill(arr, axis):
 def hextract(filIN, filOUT, x0, x1, y0, y1):
     '''
     Crop 2D image with pixel sequence numbers
-    [ref]
-    IDL lib hextract
+    [REF] IDL lib hextract
     https://idlastro.gsfc.nasa.gov/ftp/pro/astrom/hextract.pro
     '''
     ds = read_fits(filIN)
@@ -2058,8 +2198,8 @@ def hswarp(oldimage, oldheader, refheader,
 
     ## SWarp is conserving surface brightness/pixel
     ## while the pixels size changes
-    oldcdelt = get_pc(wcs=fixwcs(header=oldheader+fitsext).wcs).cdelt
-    refcdelt = get_pc(wcs=fixwcs(header=refheader+fitsext).wcs).cdelt
+    oldcdelt = get_pc(wcs=fixwcs(header=oldheader).wcs).cdelt
+    refcdelt = get_pc(wcs=fixwcs(header=refheader).wcs).cdelt
     old_pixel_fov = abs(oldcdelt[0]*oldcdelt[1])
     new_pixel_fov = abs(refcdelt[0]*refcdelt[1])
     newimage = newimage * old_pixel_fov/new_pixel_fov

@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name = 'laputan',
-    version = '1.1.1',
+    version = '1.1.2',
     author = 'D. HU',
     author_email = 'dangning.hu@cea.fr',
     description = 'Library of Astronomical Python Utility Tool Annex',

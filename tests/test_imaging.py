@@ -20,7 +20,7 @@ from astropy.wcs import WCS
 sys.path.insert(0, testdir+'/..') ## laputan path
 from laputan.inout import fitsext, read_fits, write_fits
 from laputan.astrom import fixwcs
-from laputan.imaging import (improve, islice, icrop, iswarp,
+from laputan.imaging import (improve, islice, icrop, irebin, iswarp,
                              imontage, iconvolve, respect, sextract,
                              wclean, interfill, hextract, hswarp)
 
@@ -34,6 +34,10 @@ imp.rand_splitnorm([datdir+'M83_unc', datdir+'M83_unc'])
 print('add split rand', imp.im[0,0,:])
 imp.crop(outdir+'M83_imp_crop', sizval=(0.005,0.009), cenpix=(7,8))
 print('See out/M83_imp_crop.fits [Done]')
+imp = improve(datdir+'M83', verbose=True)
+imp.rebin(outdir+'M83_imp_rebin', pixscale=7)
+print('See out/M83_imp_rebin.fits [Done]')
+
 
 print('\n TEST islice ')
 print('-------------')
@@ -50,6 +54,12 @@ crp = icrop(datdir+'M83', filOUT=outdir+'M83_icrop',
             filUNC=[datdir+'M83_unc', datdir+'M83_unc'],
             dist='splitnorm', verbose=True)
 print('See out/M83_icrop.fits [Done]')
+
+print('\n TEST irebin ')
+print('-------------')
+rbn = irebin(datdir+'M83', filOUT=outdir+'M83_irebin',
+             pixscale=10)
+print('See out/M83_irebin.fits [Done]')
 
 print('\n TEST imontage ')
 print('---------------')
@@ -124,10 +134,38 @@ print('Convolve M82_IRAC4 [Done]')
 
 print('\n TEST sextract ')
 print('---------------')
+slits = ['Ns', 'Nh']
+obsid = [
+    ['3390001.1','F011100297_N002','NG'], # A1-6, H1-2
+]
+buildir = outdir+'/cubuild/'
+if not os.path.exists(buildir):
+    os.makedirs(buildir)
+fits_irc = []
+parobs = []
+for obs in obsid:
+    for s in slits:
+        fits_irc.append(buildir+obs[0]+'_'+s)
+        parobs.append([ obs[0], s, obs[1], obs[2] ])
+for i in range(len(parobs)):
+    sext = sextract(datdir, parobs[i])
+    Nsub = 6
+    
+    ## MC add pointing unc
+    Nmc = 3
+    for j in range(Nmc+1):
+        if j==0:
+            sext.spec_build(fits_irc[i],
+                            Nx=4, Ny=24, Nsub=Nsub)
+            rbn = irebin(fits_irc[i], filOUT=fits_irc[i]+'_rbn',pixscale=5)
+        else:
+            sext.spec_build(fits_irc[i]+'_'+str(j),
+                            Nx=4, Ny=24, Nsub=Nsub)
+            rbn = irebin(fits_irc[i]+'_'+str(j), filOUT=fits_irc[i]+'_'+str(j)+'_rbn',pixscale=5)
 
 print('\n TEST respect ')
 print('--------------')
-rsp = respect(tmpdir=outdir+'rsp')
+rsp = respect()
 
 flist = [datdir+'M82_SL1', datdir+'M82_SL2']
 uncl = [f+'_unc' for f in flist]

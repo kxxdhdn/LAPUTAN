@@ -26,14 +26,25 @@ Anaconda's environment control is recommanded.
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@cea.fr
 * vlog = +Video blog+ Version LOG
+** v1.1.2 (20210622)
+- ~imaging.sextract~
+  + Now ~spec_build~ allows to define slit width with ~Nx~ option
+  + Added tests
+- Added ~imaging.irebin~
+  + Added tests
+- ~imaging.improve~
+  + Added ~rebin~ inspired by IDL ~hrebin~
 ** v1.1.1 (20210621)
 - Added ~imaging.respect~
   + ~concat~ similar to ~imaging.concatenante~
   + ~smooth~
+  + Added tests
 - ~imaging.concatenante~
   + Modified input variables
 - ~imaging.iswarp~
   + Added ~cropedge~ option to ~combine~
+- ~imaging.improve~
+  + Added ~uncestimate~
 - Added ~utilities.py~
   + ~InputError~
 ** v1.1 (20210615)
