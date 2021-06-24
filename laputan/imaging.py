@@ -8,6 +8,8 @@ Imaging
     improve:
         uncestimate, rand_norm, rand_splitnorm, 
         slice, slice_inv_sq, crop, rebin
+    Jy_per_pix_to_MJy_per_sr(improve):
+        header, image, wave
     islice(improve):
         image, wave, filenames, clean
     icrop(improve):
@@ -27,8 +29,7 @@ Imaging
     sextract(improve):
         rand_pointing, spec_build, sav_build,
         header, image, wave
-    Jy_per_pix_to_MJy_per_sr, wmask, wclean, interfill,
-    hextract, hswarp, concatenante, 
+    wmask, wclean, interfill, hextract, hswarp, concatenante, 
 
 """
 
@@ -433,6 +434,35 @@ class improve:
         self.im = newimage
     
         return newimage
+
+class Jy_per_pix_to_MJy_per_sr(improve):
+    '''
+    Convert image unit from Jy/pix to MJy/sr
+
+    ------ INPUT ------
+    filIN               input FITS file
+    filOUT              output FITS file
+    ------ OUTPUT ------
+    '''
+    def __init__(self, filIN, filOUT=None, wmod=0, verbose=False):
+        super().__init__(filIN, wmod, verbose)
+
+        ## gmean( Jy/MJy / sr/pix )
+        ufactor = np.sqrt(np.prod(1.e-6/pix2sr(1., self.cdelt)))
+        self.im = self.im * ufactor
+        self.hdr['BUNIT'] = 'MJy/sr'
+
+        if filOUT is not None:
+            write_fits(filOUT, self.hdr, self.im, self.wvl, self.wmod)
+            
+    def header(self):
+        return self.hdr
+            
+    def image(self):
+        return self.im
+
+    def wave(self):
+        return self.wvl
     
 class islice(improve):
     '''
@@ -1116,7 +1146,7 @@ class iswarp(improve):
         return im_fp
 
     def combine(self, flist, combtype='med',
-                keepedge=False, cropedge=True,
+                keepedge=False, cropedge=False,
                 uncpdf=None, filOUT=None, tmpdir=None):
         '''
         Combine 
@@ -1483,8 +1513,12 @@ class iconvolve(improve):
             self.convim = np.array(im)
             ## recover 3D header cause the lost of WCS due to PS3_0='WCS-TAB'
             # self.hdr = read_fits(self.filIN).header
+
+            fclean(f+'_conv'+fitsext)
         else:
             self.convim = read_fits(self.filIN+'_conv').data
+
+            fclean(self.filIN+'_conv'+fitsext)
         
         if self.filOUT is not None:
             comment = "Convolved by G. Aniano's IDL routine."
@@ -1859,24 +1893,6 @@ class sextract(improve):
 
     def wave(self):
         return self.wvl
-
-def Jy_per_pix_to_MJy_per_sr(filIN, filOUT=None):
-    '''
-    Convert image unit from Jy/pix to MJy/sr
-    '''
-    hd = read_fits(filIN)
-    oldimage = hd.data
-
-    cdelt = get_pc(header=hd.header).cdelt
-    ## gmean( Jy/MJy / sr/pix )
-    ufactor = np.sqrt(np.prod(1.e-6/pix2sr(1., cdelt)))
-    # print(cdelt, unit_fac)
-    newimage = oldimage * ufactor
-    hdr = swp.refheader
-    hdr['BUNIT'] = 'MJy/sr'
-    write_fits(path_cal+src+'_'+phot, swp.refheader, image_phot)
-
-    return newimage
 
 def wmask(filIN, filOUT=None):
     '''

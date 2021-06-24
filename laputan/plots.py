@@ -6,7 +6,7 @@
 Plots
 
     plotool:
-        figure, set_border, Cartesian, set_ax,
+        figure, set_border, set_ax,
         plot, set_font, save, show
     pplot(plotool):
         add_plot
@@ -29,14 +29,11 @@ class plotool:
     '''
     PLOT tOOL
     '''
-    def __init__(self, x=np.zeros(2), y=np.zeros(2),
-                 xerr=None, yerr=None):
+    def __init__(self, x=np.zeros(2), y=np.zeros(2)):
         
         # INPUTS
         self.x = x
         self.y = y
-        self.xerr = xerr
-        self.yerr = yerr
 
         self.ax = None
 
@@ -63,15 +60,8 @@ class plotool:
         plt.subplots_adjust(left=left, bottom=bottom,
             right=right, top=top, wspace=wspace, hspace=hspace)
 
-    def Cartesian(self, c=None, ls=None, lw=None,
-                  ec=None, elw=None, lab=None):
-
-        self.markers, self.caps, self.bars = self.ax.errorbar(
-            self.x, self.y, yerr=self.yerr, xerr=self.xerr, c=c,
-            ls=ls, lw=lw, ecolor=ec, elinewidth=elw, label=lab)
-
     def set_ax(self, xlog=False, ylog=False,
-               basex=10,basey=10,nonposx='sym', nonposy='sym',
+               basex=10, basey=10, nonposx='sym', nonposy='sym',
                xlim=(None,None), ylim=(None,None),
                xlab=None, ylab=None, legend=None, title=None):
         '''
@@ -103,25 +93,34 @@ class plotool:
         self.ax.legend(loc=legend)
         self.legend = legend
     
-    def plot(self, nrow=1, ncol=1, x=None, y=None,
+    def plot(self, nrow=1, ncol=1,
+             x=None, y=None, xerr=None, yerr=None,
              xlim=(None, None), ylim=(None, None),
              xlog=False, ylog=False,
-             basex=10,basey=10,nonposx='sym', nonposy='sym',
-             c=None, ls=None, lw=None,
-             ec=None, elw=None, xlab=None, ylab=None,
-             lab=None, legend=None, title=None, mod='CA'):
+             basex=10, basey=10, nonposx='sym', nonposy='sym',
+             fmt='', c=None, ls=None, lw=None,
+             ecolor=None, elinewidth=None, capsize=None, barsabove=False,
+             xlab=None, ylab=None,
+             label=None, legend=None, title=None, mod='CA'):
 
         if x is None:
             x = self.x
+        else:
+            self.x = x
         if y is None:
             y = self.y
+        else:
+            self.y = y
             
         if mod=='CA':
-            if self.nrows==1 and self.ncols==1:
-                self.Cartesian(c, ls, lw, ec, elw, lab)
-            else:
+            if self.nrows!=1 or self.ncols!=1:
                 self.ax = self.axes[nrow-1,ncol-1]
-                self.Cartesian(c, ls, lw, ec, elw, lab)
+                
+            self.markers, self.caps, self.bars = self.ax.errorbar(
+                x=x, y=y, yerr=yerr, xerr=xerr,
+                fmt=fmt, c=c, ls=ls, lw=lw,
+                ecolor=ecolor, elinewidth=elinewidth,
+                capsize=capsize, barsabove=barsabove, label=label)
             
             self.set_ax(xlog, ylog, basex, basey, nonposx, nonposy,
                         xlim, ylim, xlab, ylab, legend, title)
@@ -168,23 +167,19 @@ class plotool:
 
 class pplot(plotool):
     '''
-    Plot single 2D curve
+    Uni-frame plot (1 row * 1 col)
     '''
-    def __init__(self, x=None, y=None, xerr=None, yerr=None,
+    def __init__(self, x, y, xerr=None, yerr=None,
                  xlim=(None, None), ylim=(None,None),
                  xlog=None, ylog=None,
-                 basex=10,basey=10,nonposx='sym', nonposy='sym',
-                 c=None, ls=None, lw=.5, ec='r', elw=.8,
-                 xlab='X', ylab='Y', lab=None, legend=None, title='2D Curve',
-                 figsize=None, figint=False,
+                 basex=10, basey=10, nonposx='sym', nonposy='sym',
+                 fmt='', c=None, ls=None, lw=.5, ec='r', elw=.8,
+                 capsize=None, barsabove=False, label=None,
+                 xlab='X', ylab='Y', legend=None,
+                 title='Untitled', figsize=None, figint=False,
                  left=.1, bottom=.1, right=.99, top=.9,
                  wspace=None, hspace=None, clib='base'):
-        super().__init__(x, y, xerr, yerr)
-
-        if x is None:
-            x = self.x
-        if y is None:
-            y = self.y
+        super().__init__(x, y)
 
         ## Named color lib
         if clib=='base':
@@ -206,7 +201,9 @@ class pplot(plotool):
 
         if c is None:
             c = self.clib[self.iplot]
-        self.Cartesian(c, ls, lw, ec, elw, lab)
+        self.plot(x, y, xerr=xerr, yerr=yerr,
+                  fmt=fmt, c=c, ls=ls, lw=lw, ecolor=ec, elinewidth=elw,
+                  capsize=capsize, barsabove=barsabove, label=label)
 
         self.set_ax(xlog, ylog, basex, basey, nonposx, nonposy,
                     xlim, ylim, xlab, ylab, legend, title)
@@ -214,7 +211,8 @@ class pplot(plotool):
         self.set_font()
 
     def add_plot(self, x=None, y=None, xerr=None, yerr=None,
-                 c=None, ls=None, lw=.5, ec='r', elw=.8, lab=None):
+                 fmt='', c=None, ls=None, lw=.5, ec='r', elw=.8,
+                 capsize=None, barsabove=False, label=None):
 
         if x is None:
             x = self.x
@@ -228,7 +226,9 @@ class pplot(plotool):
         self.iplot += 1
         if c is None:
             c = self.clib[self.iplot]
-            
-        self.Cartesian(c, ls, lw, ec, elw, lab)
+
+        self.plot(x, y, xerr=xerr, yerr=yerr,
+                  fmt=fmt, c=c, ls=ls, lw=lw, ecolor=ec, elinewidth=elw,
+                  capsize=capsize, barsabove=barsabove, label=label)
 
         self.set_ax(legend=self.legend)

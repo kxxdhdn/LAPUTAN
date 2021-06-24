@@ -20,9 +20,10 @@ from astropy.wcs import WCS
 sys.path.insert(0, testdir+'/..') ## laputan path
 from laputan.inout import fitsext, read_fits, write_fits
 from laputan.astrom import fixwcs
-from laputan.imaging import (improve, islice, icrop, irebin, iswarp,
-                             imontage, iconvolve, respect, sextract,
-                             wclean, interfill, hextract, hswarp)
+from laputan.imaging import ( improve, Jy_per_pix_to_MJy_per_sr,
+                              islice, icrop, irebin, iswarp,
+                              imontage, iconvolve, respect, sextract,
+                              wclean, interfill, hextract, hswarp )
 
 print('\n TEST improve ')
 print('--------------')
@@ -38,6 +39,11 @@ imp = improve(datdir+'M83', verbose=True)
 imp.rebin(outdir+'M83_imp_rebin', pixscale=7)
 print('See out/M83_imp_rebin.fits [Done]')
 
+print('\n TEST Jy_per_pix_to_MJy_per_sr ')
+print('-------------------------------')
+Jy_per_pix_to_MJy_per_sr(datdir+'M82_IRAC1_DP', 
+                         filOUT=outdir+'M82_IRAC1_unit')
+print('See out/M82_IRAC1_unit.fits [Done]')
 
 print('\n TEST islice ')
 print('-------------')
