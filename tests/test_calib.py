@@ -22,8 +22,11 @@ from laputan.calib import (intercalib, photometry_profile,
 
 print('\n TEST intercalib ')
 print('-----------------')
-print('* via FITS file *')
 phots = 'IRAC1', 'IRAC4'
+wcen = intercalib().wcenter(phots)
+print('Wavelength center of the filters (IRAC1, IRAC4): ', wcen)
+
+print('* via FITS file *')
 c1 = intercalib(datdir+'M82')
 sp1 = c1.synthetic_photometry(phots)
 print('Fnu_filt = ', sp1.Fnu_filt.shape)
@@ -56,8 +59,8 @@ plt.subplots_adjust(left=.1, bottom=.05, \
 ax1, ax2 = axes
 
 print('* via FITS file *')
-new_spec11 = c1.specorrect(a1, b1, wlim=wlim11)
-new_spec12 = c1.specorrect(a2, b2, wlim=wlim12)
+new_spec11 = c1.specorrect(factor=a1, offset=b1, wlim=wlim11)
+new_spec12 = c1.specorrect(factor=a2, offset=b2, wlim=wlim12)
 ax1.plot(c1.wvl, c1.im[:,y,x], c='k', label='y')
 ax1.plot(c1.wvl, new_spec11[:,y,x], c='y',
          label='{}*y+{}, x=({},{})'.format(a1,b1,wlim11[0],wlim11[1]))
@@ -66,7 +69,7 @@ ax1.plot(c1.wvl, new_spec12[:,y,x], c='g',
 ax1.legend(loc='upper left')
 
 print('* via data array *')
-new_spec2 = c2.specorrect(a1, b1, w_spec=wave, Fnu_spec=spec, wlim=wlim2)
+new_spec2 = c2.specorrect(factor=a1, offset=b1, w_spec=wave, Fnu_spec=spec, wlim=wlim2)
 ax2.plot(wave, spec, c='k', label='y')
 ax2.plot(wave, new_spec2, c='y',
          label='{}*y+{}, x=({},{})'.format(a1,b1,wlim2[0],wlim2[1]))

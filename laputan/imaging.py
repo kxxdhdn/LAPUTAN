@@ -6,10 +6,12 @@
 Imaging
 
     improve:
-        uncestimate, rand_norm, rand_splitnorm, 
+        uncert, rand_norm, rand_splitnorm, 
         slice, slice_inv_sq, crop, rebin
     Jy_per_pix_to_MJy_per_sr(improve):
         header, image, wave
+    iuncert(improve):
+        unc
     islice(improve):
         image, wave, filenames, clean
     icrop(improve):
@@ -101,40 +103,71 @@ class improve:
             else:
                 self.Nw = len(self.wvl)
 
-    def uncestimate(self, filUNC=None, imbg=None, zerovalue=np.nan):
+    def uncert(self, filOUT=None, filUNC=None, filWGT=None, wfac=1.,
+               BG_image=None, BG_weight=None, zerovalue=np.nan):
         '''
         Estimate uncertainties from the background map
-        So made unc map is homogenizing
+        So made error map is uniform/weighted
 
         ------ INPUT ------
+        filOUT              output uncertainty map (FITS)
         filUNC              input uncertainty map (FITS)
-        imbg                background image used to generate homogenizing unc map
-        zerovalue           value used to replace zero value (Default:NaN)
+        filWGT              input weight map (FITS)
+        wfac                multiplication factor for filWGT (Default: 1)
+        BG_image            background image array used to generate unc map
+        BG_weight           background weight array
+        zerovalue           value used to replace zero value (Default: NaN)
         ------ OUTPUT ------
         unc                 estimated unc map
         '''
+        ## 
         if filUNC is not None:
             unc = read_fits(filUNC).data
         else:
-            if imbg is not None:
-                im = imbg
-                Nw, Ny, Nz = imbg.shape
+            if BG_image is not None:
+                im = BG_image
+                Ny, Nx = BG_image.shape
             else:
                 im = self.im
-                Nw = self.Nw
                 Ny = self.Ny
                 Nx = self.Nx
-                
-            unc = []
-            for w in range(Nw):
-                unc.append(np.nanstd(im[w,:,:]))
-            unc = np.array(unc)
+            Nw = self.Nw
+
+            ## sigma: std dev of (weighted) flux distribution of bg region
+            if BG_weight is not None:
+                if self.Ndim==3:
+                    sigma = np.nanstd(im * BG_weight, axis=(1,2))
+                else:
+                    sigma = np.nanstd(im * BG_weight)
+            else:
+                if self.Ndim==3:
+                    sigma = np.nanstd(im, axis=(1,2))
+                else:
+                    sigma = np.nanstd(im)
+
+            ## wgt: weight map
+            if filWGT is not None:
+                wgt = read_fits(filWGT).data * wfac
+            else:
+                wgt = np.ones(self.im.shape) * wfac
+
+            ## unc: weighted rms = root of var/wgt
+            if self.Ndim==3:
+                unc = []
+                for w in range(Nw):
+                    unc.append(np.sqrt(1./wgt[w,:,:]) * sigma(w))
+                unc = np.array(unc)
+            else:
+                unc = np.sqrt(1./wgt) * sigma
+
+            ## Replace zero values
             unc[unc==0] = zerovalue
-            unc = np.repeat(unc[:,np.newaxis], Ny, axis=1)
-            unc = np.repeat(unc[:,:,np.newaxis], Nx, axis=2)
 
         self.unc = unc
-
+        
+        if filOUT is not None:
+            write_fits(filOUT, self.hdr, unc, self.wvl, self.wmod)
+            
         return unc
 
     def rand_norm(self, filIN=None, unc=None, sigma=1., mu=0.):
@@ -206,11 +239,12 @@ class improve:
                 slist.append(f+ext)
                 write_fits(f, hdr, self.im[k,:,:]) # gauss_noise inclu
         else:
-            print('Input file is a 2D image which cannot be sliced! ')
             f = filSL+'_0000'+postfix
             slist.append(f+ext)
             write_fits(f, self.hdr, self.im) # gauss_noise inclu
-            print('Rewritten with only random noise added (if provided).')
+            if self.verbose==True:
+                print('Input file is a 2D image which cannot be sliced! ')
+                print('Rewritten with only random noise added (if provided).')
 
         return slist
 
@@ -463,7 +497,31 @@ class Jy_per_pix_to_MJy_per_sr(improve):
 
     def wave(self):
         return self.wvl
-    
+
+class iuncert(improve):
+    '''
+    Generate uncertainties
+
+    ------ INPUT ------
+    filIN               input map (FITS)
+    filOUT              output weight map (FITS)
+    filWGT              input weight map (FITS)
+    wfac                multiplication factor for filWGT (Default: 1)
+    BG_image            background image array
+    BG_weight           background weight array
+    zerovalue           value to replace zeros (Default: NaN)
+    ------ OUTPUT ------
+    '''
+    def __init__(self, filIN, filOUT=None, filWGT=None, wfac=1,
+                 BG_image=None, BG_weight=None, zerovalue=np.nan):
+        super().__init__(filIN, wmod=0, verbose=False)
+
+        self.uncert(filOUT=filOUT, BG_image=BG_image, zerovalue=zerovalue,
+                    filWGT=filWGT, wfac=wfac, BG_weight=BG_weight)
+
+    def unc(self):
+        return self.unc
+
 class islice(improve):
     '''
     Slice a cube
@@ -1624,7 +1682,7 @@ class respect(improve):
         if filOUT is not None:
             write_fits(filOUT, hdr, data, wave, COMMENT=comment)
 
-    def smooth(self, filIN, filUNC=None, imbg=None, zerovalue=np.nan,
+    def smooth(self, filIN, filUNC=None, BG_image=None, zerovalue=np.nan,
                wmin=None, wmax=None, lim_unc=1.e2, fltr_pn=None, cmin=5,
                filOUT=None):
         '''
@@ -1636,7 +1694,7 @@ class respect(improve):
         filIN               input spectral map (FITS)
         filUNC              input uncertainty map (FITS)
         filOUT              output smoothed spectral map (FITS)
-        imbg                background image used to generate homogenizing unc map
+        BG_image            background image used to generate unc map
         zerovalue           value used to replace zero value (Default:NaN)
         wmin                wavelength range to smooth (float)
         wmax                wavelength range to smooth (float)
@@ -1652,7 +1710,7 @@ class respect(improve):
 
         im = self.im
         wvl = self.wvl
-        unc = self.uncestimate(filUNC,imbg,zerovalue)
+        unc = self.uncert(filUNC=filUNC,BG_image=BG_image,zerovalue=zerovalue)
 
         if wmin is None:
             wmin = wvl[0]

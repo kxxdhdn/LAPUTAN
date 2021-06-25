@@ -6,7 +6,7 @@
 Calibration
 
     intercalib:
-        synthetic_photometry, specorrect
+        wcenter, synthetic_photometry, specorrect
     photometry_profile
 
 """
@@ -22,8 +22,8 @@ DEVNULL = open(os.devnull, 'w')
 ## Local
 from arrays import allist
 from inout import (ascext, fitsext, h5ext,
-                   read_fits, read_hdf5,
-                   write_hdf5#, read_ascii
+                   read_fits, write_fits,
+                   read_hdf5, write_hdf5#, read_ascii
 )
 from astrom import fixwcs
 from plots import pplot
@@ -32,9 +32,9 @@ from plots import pplot
 croot = os.path.dirname(os.path.abspath(__file__))
 
 ##-----------------------------------------------
-
-##            "intercalib" based tools
-
+##
+##            <intercalib> based tools
+##
 ##-----------------------------------------------
 
 class intercalib:
@@ -50,11 +50,54 @@ class intercalib:
         self.filIN = filIN
 
         if filIN is not None:
-            self.hdr = fixwcs(filIN+fitsext).header
+            # self.hdr = fixwcs(filIN+fitsext).header
             w = fixwcs(filIN+fitsext).wcs
             ds = read_fits(filIN)
+            self.hdr = ds.header
             self.im = ds.data
             self.wvl = ds.wave
+
+    def wcenter(self, filt):
+        '''
+        Return center wavelength of the filters
+
+        ------ INPUT ------
+        filt                photometry names (string, tuple or list)
+        ------ OUTPUT ------
+        wcen                center wavelength
+        '''
+        ## Convert all format phot names to list
+        filt = allist(filt)
+
+        wave = np.arange(.01, 40, .1)
+        flux = np.ones(len(wave))
+        flux = flux[:,np.newaxis,np.newaxis]
+
+        ## Write input.h5
+        ##----------------
+        fortIN = os.getcwd()+'/synthetic_photometry_input'
+        
+        write_hdf5(fortIN, 'Filter label', filt)
+        write_hdf5(fortIN, 'Wavelength (microns)', wave, append=True)
+        write_hdf5(fortIN, 'Flux (x.Hz-1)', flux, append=True)
+        write_hdf5(fortIN, '(docalib,dophot)', [1,1], append=True)
+
+        ## Call the Fortran lib
+        ##----------------------
+        SP.call('synthetic_photometry', shell=True)
+
+        ## Read output.h5
+        ##----------------
+        fortOUT = os.getcwd()+'/synthetic_photometry_output'
+
+        wcen = read_hdf5(fortOUT, 'Central wavelength (microns)')
+
+        ## Clean temperary h5 files
+        ##--------------------------
+        SP.call('rm -rf '+fortIN+h5ext, shell=True, cwd=os.getcwd())
+        SP.call('rm -rf '+fortOUT+h5ext, shell=True, cwd=os.getcwd())
+
+        return wcen
 
     def synthetic_photometry(self, filt, w_spec=None, Fnu_spec=None, 
                              extrapoff=True, verbose=False):
@@ -155,9 +198,10 @@ class intercalib:
         return ds
 
     def specorrect(self, factor=1., offset=0., w_spec=None, Fnu_spec=None,
-                   wlim=(None,None), filOUT=None):
+                   wlim=(None,None), ylim=(None,None), xlim=(None,None),
+                   filOUT=None):
         '''
-        Calibrate spectra from different obs. in order to eliminate gaps
+        Correct spectra 
         
         
         ------ INPUT ------
@@ -166,7 +210,9 @@ class intercalib:
         w_spec              wavelengths (Default: None - via filIN)
         Fnu_spec            spectra (Default: None - via filIN)
         wlim                wave limits (Default: (None,None))
-        filOUT              overwrite fits file (Default: NO)
+        ylim                y limits (Default: (None,None))
+        xlim                x limits (Default: (None,None))
+        filOUT              overwrite fits file (Default: None)
         ------ OUTPUT ------
         new_spec            new_spec = factor * Fnu_spec + offset
         '''
@@ -193,18 +239,23 @@ class intercalib:
         else:
             wmax = wlim[1]
 
+        ## Crop map if 3D
+        xmin, xmax = xlim
+        ymin, ymax = ylim
+
         ## Modify spectra
         new_spec = np.copy(Fnu_spec)
         for k, lam in enumerate(w_spec):
             if lam>=wmin and lam<=wmax:
-                new_spec[k,:,:] = factor * Fnu_spec[k,:,:] + offset
+                new_spec[k,ymin:ymax,xmin:xmax] = \
+                    factor * Fnu_spec[k,ymin:ymax,xmin:xmax] + offset
 
         ## Reform outputs
         if Ndim==1:
             new_spec = new_spec[:,0,0]
                     
         if filOUT is not None:
-            write_fits(filOUT, hdr, new_spec, wave=w_spec)
+            write_fits(filOUT, self.hdr, new_spec, wave=w_spec)
         
         return new_spec
 
@@ -272,7 +323,7 @@ class spec2phot(intercalib):
         comment = "Synthetic photometry with " + self.phot
         write_fits(filSYN, self.hdr, self.Fsyn, self.wvl, COMMENT=comment)
 
-class phot2phot:
+class phot2phot(intercalib):
     '''
     Intercalibration between two photometry
     '''
@@ -334,7 +385,7 @@ def photometry_profile(datdir=None, *photometry):
               # ylab='Spectral response\n(electrons / photon)',
               legend='upper left', figsize=(12,3), clib='tableau')
     for i,w in enumerate(lam):
-        p.add_plot(w, val[i], lw=1.8, lab=photometry[i])
+        p.add_plot(w, val[i], lw=1.8, label=photometry[i])
 
     p.set_border(left=.05, bottom=.2, right=.99, top=.99)
 

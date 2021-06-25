@@ -1,9 +1,8 @@
-#+TITLE: laputan
+#+TITLE: LAPUTAN: Library of Astronomical Python Utility Tool for Astrophysics Nerds
 #+AUTHOR: Dangning HU
 
-* laputan
-LAPUTAN is +an inhabitant of a flying island in Swift's Gulliver's Travels characterized by a neglect of useful occupations and a devotion to visionary projects+ 
-the Library of Astronomical Python Utility Tool Annex
+* Introduction
+Laputan is an inhabitant of a flying island in Swift's Gulliver's Travels characterized by a neglect of useful occupations and a devotion to visionary projects.
 
 [[./arx/laputa_sketch.jpg][Laputa]]
 * Helpdesk
@@ -26,12 +25,27 @@ Anaconda's environment control is recommanded.
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@cea.fr
 * vlog = +Video blog+ Version LOG
+** v1.1.5 (20210625)
+- Added ~imaging.iuncert~
+- ~imaging.improve~
+  + Renamed ~uncestimate~ as ~uncert~ and added weighted kw ~wgtbg~, ~filWGT~
+- ~calib.intercalib~
+  + Corrected ~specorrect~ FITS writing (invalid header) and added spatial crop kw ~xlim~, ~ylim~
+  + Added ~wcenter~
+- ~plots.pplot~
+  + Tuned with ~plots.plotool~ changes
+- ~plots.plotool~
+  + Modified ~plot~ kw to assimilate that of ~matplotlib.pyplot.errorbar~
+  + Set ~set_ax~ passive
+  + Added ~set_clib~
+- Added ~utilities.merge_aliases~
+- Modified package name as Library of Astronomical Python Utility Tool for Astrophysics Nerds
 ** v1.1.4 (20210624)
 - ~plots.plotool~
   + Deleted ~Cartesian~ (replaced by ~matplotlib.pyplot.errorbar~)
-  + Extended ~plot~ options
+  + Extended ~plot~ kw
 - ~imaging.iswarp~
-  + Switched ~combine~ option ~cropedge~ default to False
+  + Switched ~combine~ kw ~cropedge~ default to False
 - ~imaging.Jy_per_pix_to_MJy_per_sr~
   + Corrected errors and added tests
 ** v1.1.3 (20210623)
@@ -39,7 +53,7 @@ Anaconda's environment control is recommanded.
   + Corrected ~rebin~ 3D FITS writing (lack of wavelength HDU)
 ** v1.1.2 (20210622)
 - ~imaging.sextract~
-  + Now ~spec_build~ allows to define slit width with ~Nx~ option
+  + Now ~spec_build~ allows to define slit width with ~Nx~ kw
   + Added tests
 - Added ~imaging.irebin~
   + Added tests
@@ -53,11 +67,11 @@ Anaconda's environment control is recommanded.
 - ~imaging.concatenante~
   + Modified input variables
 - ~imaging.iswarp~
-  + Added ~cropedge~ option to ~combine~
+  + Added ~cropedge~ kw to ~combine~
 - ~imaging.improve~
   + Added ~uncestimate~
 - Added ~utilities.py~
-  + ~InputError~
+  + ~Error~, ~InputError~
 ** v1.1 (20210615)
 - ~imaging.iswarp~
   + Coadd refheader generator

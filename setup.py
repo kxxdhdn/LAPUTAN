@@ -2,10 +2,10 @@ from setuptools import setup
 
 setup(
     name = 'laputan',
-    version = '1.1.4',
+    version = '1.1.5',
     author = 'D. HU',
     author_email = 'dangning.hu@cea.fr',
-    description = 'Library of Astronomical Python Utility Tool Annex',
+    description = 'Library of Astronomical Python Utility Tool for Astrophysics Nerds',
     license = 'BSD',
     keywords = 'astronomy astrophysics',
     url = 'https://github.com/kxxdhdn/laputan',
