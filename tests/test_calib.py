@@ -81,9 +81,9 @@ print('See ./out/calib_specorrect.png [Done]')
 print('\n TEST photometry_profile ')
 print('-------------------------')
 phot_lib = photometry_profile(None,
-                              'IRAC1', 'IRAC2', 'IRAC3', 'IRAC4', 'MIPS1',
-                              'WISE1', 'WISE2', 'WISE3', 'WISE4',)
-phot_lib.save(outdir+'calib_phot')
+                              'IRAC1', 'IRAC2', 'IRAC3', 'IRAC4', 'MIPS1',)
+                              # 'WISE1', 'WISE2', 'WISE3', 'WISE4',)
+phot_lib.save(outdir+'calib_phot', transparent=1)
 print('See ./out/calib_phot.png [Done]')
 
 # plt.show()

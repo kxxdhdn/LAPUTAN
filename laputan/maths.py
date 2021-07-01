@@ -32,6 +32,12 @@ def f_lin0(x, A):
     '''
     return A * x
 
+def f_lin_p(x, A, B):
+    '''
+    Y = abs(A) * x + B
+    '''
+    return abs(A) * x + B
+
 def gaussian(x, mu, sigma):
     '''
     Normalized Gaussian function given variable x

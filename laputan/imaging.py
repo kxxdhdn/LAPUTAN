@@ -1364,7 +1364,10 @@ class iswarp(improve):
             # tqdm.write(str(new_pixel_fov))
             # tqdm.write(str(abs(newheader['CD1_1']*newheader['CD2_2'])))
 
-            hyperimage.append(newimage)
+            if Nw==1:
+                hyperimage = newimage
+            else:
+                hyperimage.append(newimage)
 
         hyperimage = np.array(hyperimage)
 
@@ -1661,7 +1664,7 @@ class respect(improve):
                 imax = closest(wmax, self.wvl[-1])
                 iwi = 0
                 iws = -1
-                for i, w in enumerate(self.wvl):
+                for i, w in enumerate(self.wvl[:-2]):
                     if w<wrange[imin][0] and self.wvl[i+1]>wrange[imin][0]:
                         iwi = i+1
                     if w<wrange[imax][1] and self.wvl[i+1]>wrange[imax][0]:
@@ -2341,7 +2344,7 @@ def concatenate(flist, filOUT=None, comment=None,
             imax = closest(wmax, ds.wave[-1])
             iwi = 0
             iws = -1
-            for i, w in enumerate(ds.wave):
+            for i, w in enumerate(ds.wave[:-2]):
                 if w<wrange[imin][0] and ds.wave[i+1]>wrange[imin][0]:
                     iwi = i+1
                 if w<wrange[imax][1] and ds.wave[i+1]>wrange[imax][0]:
