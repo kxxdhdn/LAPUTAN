@@ -175,13 +175,16 @@ def get_pc(cd=None, header=None, wcs=None):
 
     return ds
 
-def fixwcs(file=None, header=None):
+def fixwcs(file=None, header=None, mode='red_dim'):
     '''
     Auto-detect & reduce dim if WCS is 3D with distortion
 
     ------ INPUT ------
     file                FITS file (priority if co-exist)
     header              header object
+    mode                ways to fix 3D WCS with SIP distortion
+                          'red_dim' (Default)
+                          'del_sip'
     ------ OUTPUT ------
     ds                  output object
       header              header of primary HDU
@@ -190,10 +193,9 @@ def fixwcs(file=None, header=None):
     '''
     ## Initialize output object
     ds = type('', (), {})()
-    ds.wcs = WCS(None, naxis=2)
+    ds.wcs = WCS(None)
     ds.header = None
-    ds.was3d = False
-
+        
     ## Read file/header
     if file is not None:
         hdr = fits.open(file)[0].header
@@ -204,19 +206,33 @@ def fixwcs(file=None, header=None):
         else:
             raise ValueError('No input!')
 
-    ## Reduce header dim/kw
     if header['NAXIS']==3:
         ds.was3d = True
+    else:
+        ds.was3d = False
+
+    ## Fix 3D WCS with SIP distortion
+    if mode=='red_dim':
+        ## Opt.1: reduce dimension
         for kw in hdr.keys():
             if '3' in kw:
                 del header[kw]
         header['NAXIS'] = 2
-        header['COMMENT'] = "3D keywords excluded (for astropy.wcs). "
-    
-    ## Create 2D WCS object
-    ds.wcs = WCS(header, naxis=2)
+        header['COMMENT'] = "Removed 3D keywords. "
+        
+        ds.wcs = WCS(header, naxis=2)
+    elif mode=='del_sip':
+        ## Opt.2: delete SIP keywords
+        for kw in hdr.keys():
+            if ('A_' in kw) and (not 'PA' in kw) and (not 'RA' in kw):
+                del header[kw]
+            if ('B_' in kw) or ('AP_' in kw) or ('BP_' in kw):
+                del header[kw]
+        header['COMMENT'] = "Removed SIP keywords. "
 
-    ds.header = header # (reduced) header
+        ds.wcs = WCS(header)
+    
+    ds.header = header # fixed header
 
     return ds
 

@@ -19,12 +19,22 @@ pip uninstall laputan
 #+END_SRC
 Anaconda's environment control is recommanded.
 ** In order to access the full functionality, you will need the following extra dependencies:
-- [[https://github.com/kxxdhdn/laputan/tree/master/idl][IDL]]
+- [[https://github.com/kxxdhdn/laputan/tree/main/idl][IDL]]
 - [[https://www.astromatic.net/software/swarp][SWarp]]
-- [[https://github.com/kxxdhdn/laputan/tree/master/swing][SwING]]
+- [[https://github.com/kxxdhdn/laputan/tree/main/swing][SwING]]
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@cea.fr
-* vlog = +Video blog+ Version LOG
+* Version log
+** v1.2 (20210722)
+- Rewrote ~imaging.imontage~
+  + Added ~reproject_function~ kw
+  + ~reproject~ can do 3D cube reprojection without slicing (by deleting SIP kw)
+  + Updated tests
+  + Archived ~reproject~ v0.4 version as ~imontage_v0_4~
+- ~imaging.improve~
+  + Corrected ~self.hdr~ and added ~self.hdred~
+  + Added ~reinit~ (used for auto-updating after ~crop~ and ~rebin~)
+  + Rewrote ~rebin~ with fractional rebinning and NaN extrapolation
 ** v1.1.6 (20210701)
 - Added ~maths.f_lin_p~
 - ~imaging.iswarp~

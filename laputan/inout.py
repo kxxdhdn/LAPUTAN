@@ -16,6 +16,7 @@ logging.disable(sys.maxsize)
 import subprocess as SP
 import numpy as np
 from astropy.io import fits
+from astropy.wcs import WCS
 import h5py as H5
 import csv
 
@@ -98,13 +99,18 @@ def read_fits(file, file_unc=None, wmod=0):
     ds.header_w = None
     ds.wave = None
     ds.unc = None
-
+    
     ## Read header & data
     with fits.open(file+fitsext) as hdul:
         ds.HDUL = hdul
         hdr = hdul[0].header
         ds.data = hdul[0].data
         ds.header = hdr
+        try:
+            ds.wcs = WCS(hdr)
+        except:
+            ds.wcs = WCS(None)
+            # print('Not supported WCS (probably with 3D SIP distortion), use astrom.fixwcs')
 
         ## Read wavelength
         if len(hdul)==2:

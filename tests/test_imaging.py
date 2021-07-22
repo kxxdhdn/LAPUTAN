@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys, os, logging
+import sys, os, logging, warnings
 # logging.disable(sys.maxsize)
+warnings.filterwarnings("ignore", message="Skipping SYSTEM_VARIABLE record")
 
 ## Set dir
 testdir = os.path.dirname(os.path.abspath(__file__))
@@ -36,7 +37,8 @@ print('add split rand', imp.im[0,0,:])
 imp.crop(outdir+'M83_imp_crop', sizval=(0.005,0.009), cenpix=(7,8))
 print('See out/M83_imp_crop.fits [Done]')
 imp = improve(datdir+'M83', verbose=True)
-imp.rebin(outdir+'M83_imp_rebin', pixscale=7)
+imp.rebin(outdir+'M83_imp_rebin', pixscale=7, 
+          total=False, extrapol=True)
 print('See out/M83_imp_rebin.fits [Done]')
 
 print('\n TEST Jy_per_pix_to_MJy_per_sr ')
@@ -48,8 +50,7 @@ print('See out/M82_IRAC1_unit.fits [Done]')
 print('\n TEST islice ')
 print('-------------')
 slc = islice(datdir+'M83', filSL=outdir+'M83_inv_sqrt',
-             filUNC=datdir+'M83_unc', slicetype='inv_sq', postfix='_test_')
-print(slc.filenames()[0])
+             filUNC=datdir+'M83_unc', slicetype='inv_sq', postfix='')
 if input('Clean slices (y/n): ')=='y':
     slc.clean()
 
@@ -63,23 +64,40 @@ print('See out/M83_icrop.fits [Done]')
 
 print('\n TEST irebin ')
 print('-------------')
-rbn = irebin(datdir+'M83', filOUT=outdir+'M83_irebin',
-             pixscale=10)
+rbn = irebin(datdir+'M83', filOUT=outdir+'M83_irebin', verbose=1,
+             pixscale=1, total=False, extrapol=False)
 print('See out/M83_irebin.fits [Done]')
 
 print('\n TEST imontage ')
 print('---------------')
-mtg = imontage((datdir+'M82_09_L86', datdir+'M82_04_SL1'),
-               filREF=datdir+'M82_09_L86', fmod='ext',
-               tmpdir=outdir+'mtg/')
-mtg.make()
-mtg.reproject_mc(datdir+'M82_04_SL1', dist='norm', Nmc=0,
-                 filOUT=outdir+'M82_04_SL1_mtgrep')
-print('Reproject M82_04_SL1 to M82_09_L86 [Done]')
-# mtg.combine((datdir+'M82_04_SL1',datdir+'M82_06N_SL1'), dist='norm', Nmc=3,
-#             # do_rep=False,
-#             filOUT=outdir+'M82_SL1_mtgrep')
-mtg.coadd((datdir+'M82_04_SL1',datdir+'M82_06N_SL1'), dist='norm', Nmc=2,
+ds = read_fits(datdir+'M82_04_SL1')
+hdr = fixwcs(datdir+'M82_04_SL1'+fitsext).header
+write_fits(outdir+'sip', hdr, ds.data[0])
+
+mtg = imontage('exact', tmpdir=outdir+'mtg/')
+hdr_ref = fixwcs(datdir+'M82_template'+fitsext).header
+mtg.reproject_mc(outdir+'sip', refheader=hdr_ref,
+                 filOUT=outdir+'sip_mtgrep')
+hdr_nosip = hdr.copy()
+for kw in hdr.keys():
+    if ('A_' in kw) and (not 'PA' in kw) and (not 'RA' in kw):
+        # print(kw)
+        del hdr_nosip[kw]
+    if 'B_' in kw:
+        # print(kw)
+        del hdr_nosip[kw]
+    if 'AP_' in kw:
+        # print(kw)
+        del hdr_nosip[kw]
+    if 'BP_' in kw:
+        # print(kw)
+        del hdr_nosip[kw]
+write_fits(outdir+'nosip', hdr_nosip, ds.data[0])
+mtg.reproject_mc(outdir+'nosip', refheader=hdr_ref,
+                 filOUT=outdir+'nosip_mtgrep')
+print('SIP kw can be removed since they are encoded in CD matrix! [Done]')
+mtg.coadd((datdir+'M82_04_SL1',datdir+'M82_06N_SL1'),
+          refheader=hdr_ref, dist='norm', Nmc=2,
           filOUT=outdir+'M82_SL1_mtgrep')
 print('Reproject M82_04_SL1 & M82_06N_SL1 to M82_09_L86 [Done]')
 
@@ -154,12 +172,12 @@ for obs in obsid:
         fits_irc.append(buildir+obs[0]+'_'+s)
         parobs.append([ obs[0], s, obs[1], obs[2] ])
 for i in range(len(parobs)):
-    sext = sextract(datdir, parobs[i])
     Nsub = 6
     
     ## MC add pointing unc
     Nmc = 3
     for j in range(Nmc+1):
+        sext = sextract(datdir, parobs[i])
         if j==0:
             sext.spec_build(fits_irc[i],
                             Nx=4, Ny=24, Nsub=Nsub)
@@ -223,7 +241,7 @@ oldimage = old.data
 oldheader = old.header
 refheader = read_fits(datdir+'M82_09_L86').header
 hswp = hswarp(oldimage, oldheader, refheader, keepedge=True,
-              tmpdir=outdir+'hswp/', verbose=True)
+              tmpdir=outdir+'hswp/', verbose=False)
 # print('hswarp image: ', hswp.image)
 # print('hswarp image header: ', hswp.header)
 print('See hswp/coadd.fits [Done]')

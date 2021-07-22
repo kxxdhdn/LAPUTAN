@@ -6,7 +6,7 @@
 Imaging
 
     improve:
-        uncert, rand_norm, rand_splitnorm, 
+        reinit, uncert, rand_norm, rand_splitnorm, 
         slice, slice_inv_sq, crop, rebin
     Jy_per_pix_to_MJy_per_sr(improve):
         header, image, wave
@@ -19,8 +19,7 @@ Imaging
     irebin(improve):
         header, image, wave
     imontage(improve):
-        make_header, make, footprint, reproject, reproject_mc,
-        combine, coadd, clean
+        reproject, reproject_mc, coadd, clean
     iswarp(improve):
         footprint, combine, clean
     iconvolve(improve):
@@ -43,7 +42,7 @@ from scipy.io import readsav
 from astropy import wcs
 from astropy.io import ascii
 from astropy.table import Table
-from reproject import reproject_interp
+from reproject import reproject_interp, reproject_exact, reproject_adaptive
 from reproject.mosaicking import reproject_and_coadd
 import subprocess as SP
 
@@ -67,7 +66,8 @@ class improve:
     '''
     IMage PROcessing VEssel
     '''
-    def __init__(self, filIN, wmod=0, verbose=False):
+    def __init__(self, filIN=None, header=None, image=None, wave=None,
+                 wmod=0, verbose=False):
         '''
         self: filIN, wmod, hdr, w, cdelt, pc, cd, Ndim, Nx, Ny, Nw, im, wvl
         '''
@@ -77,31 +77,82 @@ class improve:
         self.wmod = wmod
         self.verbose = verbose
 
-        ## read image/cube
-        ## self.hdr is a 2D (reduced) header
-        ws = fixwcs(filIN+fitsext)
-        self.hdr = ws.header
+        ## Read image/cube
+        if filIN is not None:
+            ds = read_fits(filIN)
+            self.hdr = ds.header
+            self.im = ds.data
+            self.wvl = ds.wave
+        else:
+            self.hdr = header
+            self.im = image
+            self.wvl = wave
+        self.Ndim = self.im.ndim
+        if self.Ndim==3:
+            self.Nw, self.Ny, self.Nx = self.im.shape
+
+            ## Nw=1 patch
+            if self.im.shape[0]==1:
+                self.Ndim = 2
+        elif self.Ndim==2:
+            self.Ny, self.Nx = self.im.shape
+            self.Nw = None
+
+        ws = fixwcs(header=self.hdr, mode='red_dim')
+        self.hdred = ws.header # reduced header
         self.w = ws.wcs
         pcdelt = get_pc(wcs=ws.wcs)
         self.cdelt = pcdelt.cdelt
         self.pc = pcdelt.pc
         self.cd = pcdelt.cd
-        self.Nx = self.hdr['NAXIS1']
-        self.Ny = self.hdr['NAXIS2']
-        self.Nw = None
+        
         if verbose==True:
             print('<improve> file: ', filIN)
             print('Raw size (pix): {} * {}'.format(self.Nx, self.Ny))
-        ## 3D cube slicing
-        ds = read_fits(filIN)
-        self.im = ds.data
-        self.wvl = ds.wave
+
+    def reinit(self, filIN=None, header=None, image=None, wave=None,
+               wmod=0, verbose=False):
+        '''
+        Update init variables
+        '''
+        
+        ## INPUTS
+        self.filIN = filIN
+        self.wmod = wmod
+        self.verbose = verbose
+
+        ## Read image/cube
+        if filIN is not None:
+            ds = read_fits(filIN)
+            self.hdr = ds.header
+            self.im = ds.data
+            self.wvl = ds.wave
+        else:
+            self.hdr = header
+            self.im = image
+            self.wvl = wave
         self.Ndim = self.im.ndim
         if self.Ndim==3:
+            self.Nw, self.Ny, self.Nx = self.im.shape
+
+            ## Nw=1 patch
             if self.im.shape[0]==1:
-                self.Ndim = 2 # Nw=1 patch
-            else:
-                self.Nw = len(self.wvl)
+                self.Ndim = 2
+        elif self.Ndim==2:
+            self.Ny, self.Nx = self.im.shape
+            self.Nw = None
+
+        ws = fixwcs(header=self.hdr, mode='red_dim')
+        self.hdred = ws.header # reduced header
+        self.w = ws.wcs
+        pcdelt = get_pc(wcs=ws.wcs)
+        self.cdelt = pcdelt.cdelt
+        self.pc = pcdelt.pc
+        self.cd = pcdelt.cd
+        
+        if verbose==True:
+            print('<improve> file: ', filIN)
+            print('Image size (pix): {} * {}'.format(self.Nx, self.Ny))
 
     def uncert(self, filOUT=None, filUNC=None, filWGT=None, wfac=1.,
                BG_image=None, BG_weight=None, zerovalue=np.nan):
@@ -228,20 +279,20 @@ class improve:
         ## 3D cube slicing
         slist = []
         if self.Ndim==3:
-            hdr = self.hdr.copy()
-            for kw in self.hdr.keys():
-                if '3' in kw:
-                    del hdr[kw]
-            hdr['NAXIS'] = 2
+            # hdr = self.hdr.copy()
+            # for kw in self.hdr.keys():
+            #     if '3' in kw:
+            #         del hdr[kw]
+            # hdr['NAXIS'] = 2
             for k in range(self.Nw):
                 ## output filename list
                 f = filSL+'_'+'0'*(4-len(str(k)))+str(k)+postfix
                 slist.append(f+ext)
-                write_fits(f, hdr, self.im[k,:,:]) # gauss_noise inclu
+                write_fits(f, self.hdred, self.im[k,:,:]) # gauss_noise inclu
         else:
             f = filSL+'_0000'+postfix
             slist.append(f+ext)
-            write_fits(f, self.hdr, self.im) # gauss_noise inclu
+            write_fits(f, self.hdred, self.im) # gauss_noise inclu
             if self.verbose==True:
                 print('Input file is a 2D image which cannot be sliced! ')
                 print('Rewritten with only random noise added (if provided).')
@@ -253,20 +304,20 @@ class improve:
         inv_sq = 1./self.im**2
         slist = []
         if self.Ndim==3:
-            hdr = self.hdr.copy()
-            for kw in self.hdr.keys():
-                if '3' in kw:
-                    del hdr[kw]
-            hdr['NAXIS'] = 2
+            # hdr = self.hdr.copy()
+            # for kw in self.hdr.keys():
+            #     if '3' in kw:
+            #         del hdr[kw]
+            # hdr['NAXIS'] = 2
             for k in range(self.Nw):
                 ## output filename list
                 f = filSL+'_'+'0'*(4-len(str(k)))+str(k)+postfix
                 slist.append(f)
-                write_fits(f, hdr, inv_sq[k,:,:]) # gauss_noise inclu
+                write_fits(f, self.hdred, inv_sq[k,:,:]) # gauss_noise inclu
         else:
             f = filSL+'_0000'+postfix
             slist.append(f)
-            write_fits(f, self.hdr, inv_sq) # gauss_noise inclu
+            write_fits(f, self.hdred, inv_sq) # gauss_noise inclu
 
         return slist
     
@@ -274,8 +325,6 @@ class improve:
              sizpix=None, cenpix=None, sizval=None, cenval=None):
         '''
         If pix and val co-exist, pix will be taken.
-        Note that some self variables such as cdelt are
-        not renewed...idem. for rebin
 
         ------ INPUT ------
         filOUT              output file
@@ -286,6 +335,9 @@ class improve:
         ------ OUTPUT ------
         self.im             cropped image array
         '''
+        oldimage = self.im
+        hdr = self.hdr
+        
         ## Crop center
         ##-------------
         if cenpix is None:
@@ -302,7 +354,7 @@ class improve:
                     print("Number of iterations:\n{0}".format(e.niter))
         else:
             cenval = self.w.all_pix2world(np.array([cenpix]), 1)[0]
-        if not (0<cenpix[0]<self.Nx and 0<cenpix[1]<self.Ny):
+        if not (0<cenpix[0]-0.5<self.Nx and 0<cenpix[1]-0.5<self.Ny):
             raise ValueError('Crop centre overpassed image border! ')
 
         ## Crop size
@@ -339,115 +391,97 @@ class improve:
         ##---------
         ## New image
         if self.Ndim==3:
-            self.im = self.im[:, ymin:ymax, xmin:xmax] # gauss_noise inclu
+            newimage = oldimage[:, ymin:ymax, xmin:xmax] # gauss_noise inclu
             ## recover 3D non-reduced header
-            self.hdr = read_fits(self.filIN).header
+            # hdr = read_fits(self.filIN).header
         elif self.Ndim==2:
-            self.im = self.im[ymin:ymax, xmin:xmax] # gauss_noise inclu
+            newimage = oldimage[ymin:ymax, xmin:xmax] # gauss_noise inclu
+
         ## Modify header
-        ## Suppose no non-linear distortion
-        self.hdr['CRPIX1'] = sizpix[0] / 2.
-        self.hdr['CRPIX2'] = sizpix[1] / 2.
-        self.hdr['CRVAL1'] = cenval[0]
-        self.hdr['CRVAL2'] = cenval[1]
+        ##---------------
+        hdr['CRPIX1'] = math.floor(sizpix[0]/2. + 0.5)
+        hdr['CRPIX2'] = math.floor(sizpix[1]/2. + 0.5)
+        hdr['CRVAL1'] = cenval[0]
+        hdr['CRVAL2'] = cenval[1]
+        
+        self.hdr = hdr
+        self.im = newimage
+        
         ## Write cropped image/cube
         if filOUT is not None:
             # comment = "[ICROP]ped at centre: [{:.8}, {:.8}]. ".format(*cenval)
             # comment = "with size [{}, {}] (pix).".format(*sizpix)
             write_fits(filOUT, self.hdr, self.im, self.wvl, self.wmod)
 
+        ## Update self variables
+        self.reinit(header=self.hdr, image=self.im, wave=self.wvl,
+                    wmod=self.wmod, verbose=self.verbose)
+
         return self.im
 
-    def rebin(self, filOUT=None, pixscale=None):
+    def rebin(self, filOUT=None, pixscale=None, total=False, extrapol=False):
         '''
-        Shrink or expand the size of an array an arbitrary amount 
-        using interpolation
-        Note that the actual version collimates on zero point,
-        it does not conserve flux on upper right edges
-        if not integer multiplication!
-        [REF] IDL lib hrebin/frebin
+        Shrinking (box averaging) or expanding (bilinear interpolation) astro images
+        New/old images collimate on zero point.
+        [REF] IDL lib frebin/hrebin
         https://idlastro.gsfc.nasa.gov/ftp/pro/astrom/hrebin.pro
         https://github.com/wlandsman/IDLAstro/blob/master/pro/frebin.pro
 
         ------ INPUT ------
         filOUT              output file
-        pixscale            output pixel scale in arcsec
+        pixscale            output pixel scale in arcsec/pixel
+                              scalar - square pixel
+                              tuple - same Ndim with image
+        total               Default: False
+                              True - sum the non-NaN pixels
+                              False - mean
+        extrapol            Default: False
+                              True - value weighted by non NaN fractions
+                              False - NaN if any fraction is NaN
         ------ OUTPUT ------
         newimage            rebinned image array
         '''
         oldimage = self.im
         hdr = self.hdr
-        header = hdr.copy()
+        oldheader = hdr.copy()
         oldw = self.w
         # cd = w.pixel_scale_matrix
         oldcd = self.cd
-        cdelt = self.cdelt
+        oldcdelt = self.cdelt
+        oldNx = self.Nx
+        oldNy = self.Ny
         
         if pixscale is not None:
-            pixscale = pixscale / 3600. # convert arcsec to degree
-            xratio = math.ceil(pixscale / abs(cdelt[0])) # Expansion or contraction in X
-            yratio = math.ceil(pixscale / abs(cdelt[1])) # Expansion or contraction in Y
+            pixscale = allist(pixscale)
+            if len(pixscale)==1:
+                pixscale.extend(pixscale)
+            ## convert arcsec to degree
+            cdelt = np.array(pixscale) / 3600.
+            ## Expansion (>1) or contraction (<1) in X/Y
+            xratio = cdelt[0] / abs(oldcdelt[0])
+            yratio = cdelt[1] / abs(oldcdelt[1])
         else:
-            xratio = 1
-            yratio = 1
-        if self.verbose==True:
-            print('----------')
-            print('The actual (rounded) pixel scale of x axis is {} arcsec'.format(
-                abs(cdelt[0])*xratio*3600))
-            print('The actual (rounded) pixel scale of y axis is {} arcsec'.format(
-                abs(cdelt[1])*yratio*3600))
-            print('----------')
-            
-        # lam = yratio/xratio
-        # pix_ratio = xratio*yratio
-        Nx = math.ceil(self.Nx / xratio)
-        Ny = math.ceil(self.Ny / yratio)
-    
-        ## Rebin
-        ##-------
-        if xratio<1:
-            newimage = np.repeat(oldimage, Nx/self.Nx, axis=2)
-        else:
-            x_edge = Nx*xratio-self.Nx
-            # x_after = math.ceil(x_edge / 2)
-            # x_before = x_edge - x_after
-            if self.Ndim==3:
-                # npad is a tuple of (n_before, n_after) for each dimension
-                xpad = ((0,0), (0,0), (0, x_edge))
-                newimage = np.pad(oldimage, pad_width=xpad,
-                                  mode='constant', constant_values=np.nan)
-                newimage = newimage.reshape((self.Nw,self.Ny,Nx,xratio)).mean(3)
-            else:
-                xpad = ((0,0), (0, x_edge))
-                newimage = np.pad(oldimage, pad_width=xpad,
-                                  mode='constant', constant_values=np.nan)
-                newimage = newimage.reshape((self.Ny,Nx,xratio)).mean(2)
-        if yratio<1:
-            newimage = np.repeat(newimage, Ny/self.Ny, axis=1)
-        else:
-            y_edge = Ny*yratio-self.Ny
-            # y_after = math.ceil(y_edge / 2)
-            # y_before = y_edge - y_after
-            if self.Ndim==3:
-                ypad = ((0,0), (0, y_edge), (0,0))
-                newimage = np.pad(newimage, pad_width=ypad,
-                                  mode='constant', constant_values=np.nan)
-                newimage = newimage.reshape((self.Nw,Ny,yratio,Nx)).mean(2)
-            else:
-                ypad = ((0, y_edge), (0,0))
-                newimage = np.pad(newimage, pad_width=ypad,
-                                  mode='constant', constant_values=np.nan)
-                newimage = newimage.reshape((Ny,yratio,Nx)).mean(1)
+            pixscale = allist(abs(oldcdelt) * 3600.)
+            xratio = 1.
+            yratio = 1.
+
+            if self.verbose==True:
+                print('----------')
+                print('The actual map size is {} * {}'.format(self.Nx, self.Ny))
+                print('The actual pixel scale is {} * {} arcsec'.format(*pixscale))
+                print('----------')
                 
+            raise InputError('<improve.rebin>',
+                             'No pixscale, nothing has been done!')
+
         ## Modify header
         ##---------------
-        zval = oldw.all_pix2world(np.array([[0.5,0.5]]), 1)[0]
-        # hdr['NAXIS1'] = Nx
-        # hdr['NAXIS2'] = Ny
-        hdr['CRPIX1'] = 0.5
-        hdr['CRPIX2'] = 0.5
-        hdr['CRVAL1'] = zval[0]
-        hdr['CRVAL2'] = zval[1]
+
+        ## Fix CRVALn
+        crpix1 = hdr['CRPIX1']
+        crpix2 = hdr['CRPIX2']
+        hdr['CRPIX1'] = (crpix1 - 0.5) / xratio + 0.5
+        hdr['CRPIX2'] = (crpix2 - 0.5) / yratio + 0.5
     
         cd = oldcd * [xratio,yratio]
         hdr['CD1_1'] = cd[0][0]
@@ -455,18 +489,201 @@ class improve:
         hdr['CD1_2'] = cd[0][1]
         hdr['CD2_2'] = cd[1][1]
     
-        for kw in header.keys():
+        for kw in oldheader.keys():
             if 'PC' in kw:
                 del hdr[kw]
             if 'CDELT' in kw:
                 del hdr[kw]
+            
+        # lam = yratio/xratio
+        # pix_ratio = xratio*yratio
+        Nx = math.ceil(oldNx / xratio)
+        Ny = math.ceil(oldNy / yratio)
+        # Nx = int(oldNx/xratio + 0.5)
+        # Ny = int(oldNy/yratio + 0.5)
 
-        if filOUT is not None:
-            write_fits(filOUT, hdr, newimage, self.wvl, self.wmod)
+        ## Rebin
+        ##-------
+        '''
+        ## Ref: poppy(v0.3.4).utils.krebin
+        ## Klaus P's fastrebin from web
+        sh = shape[0],a.shape[0]//shape[0],shape[1],a.shape[1]//shape[1]
+        return a.reshape(sh).sum(-1).sum(1)
+        '''
 
+        if self.Ndim==3:
+            image_newx = np.zeros((self.Nw,oldNy,Nx))
+            newimage = np.zeros((self.Nw,Ny,Nx))
+            nanbox = np.zeros((self.Nw,Ny,Nx))
+        else:
+            image_newx = np.zeros((oldNy,Nx))
+            newimage = np.zeros((Ny,Nx))
+            nanbox = np.zeros((Ny,Nx))
+
+        ## istart/old1, istop/old2, rstart/new1, rstop/new2 are old grid indices
+
+        if not extrapol:
+            
+            ## Sample x axis
+            ##---------------
+            for x in range(Nx):
+                rstart = x * xratio # float
+                istart = int(rstart) # int
+                frac1 = rstart - istart
+                rstop = rstart + xratio # float
+                if int(rstop)<oldNx:
+                    ## Full covered new pixels
+                    istop = int(rstop) # int
+                    frac2 = 1. - (rstop - istop)
+                else:
+                    ## Upper edge (value 0 for uncovered frac: frac2)
+                    istop = oldNx - 1 # int
+                    frac2 = 0
+            
+                if istart==istop:
+                    ## Shrinking case with old pix containing whole new pix (box averaging)
+                    if self.Ndim==3:
+                        image_newx[:,:,x] = (1.-frac1-frac2) * oldimage[:,:,istart]
+                    else:
+                        image_newx[:,x] = (1.-frac1-frac2) * oldimage[:,istart]
+                else:
+                    ## Other cases (bilinear interpolation)
+                    if self.Ndim==3:
+                        edges = frac1*oldimage[:,:,istart] + frac2*oldimage[:,:,istop]
+                        image_newx[:,:,x] = np.sum(oldimage[:,:,istart:istop+1],axis=2) - edges
+                    else:
+                        edges = frac1*oldimage[:,istart] + frac2*oldimage[:,istop]
+                        image_newx[:,x] = np.sum(oldimage[:,istart:istop+1],axis=1) - edges
+                        
+            ## Sample y axis
+            ##---------------
+            for y in range(Ny):
+                rstart = y * yratio # float
+                istart = int(rstart) # int
+                frac1 = rstart - istart
+                rstop = rstart + yratio # float
+                if int(rstop)<oldNy:
+                    ## Full covered new pixels
+                    istop = int(rstop) # int
+                    frac2 = 1. - (rstop - istop)
+                else:
+                    ## Upper edge (value 0 for uncovered frac: frac2)
+                    istop = oldNy - 1 # int
+                    frac2 = 0
+            
+                if istart==istop:
+                    ## Shrinking case with old pix containing whole new pix (box averaging)
+                    if self.Ndim==3:
+                        newimage[:,y,:] = (1.-frac1-frac2) * image_newx[:,istart,:]
+                    else:
+                        newimage[y,:] = (1.-frac1-frac2) * image_newx[istart,:]
+                else:
+                    ## Other cases (bilinear interpolation)
+                    if self.Ndim==3:
+                        edges = frac1*image_newx[:,istart,:] + frac2*image_newx[:,istop,:]
+                        newimage[:,y,:] = np.sum(image_newx[:,istart:istop+1,:],axis=1) - edges
+                    else:
+                        edges = frac1*image_newx[istart,:] + frac2*image_newx[istop,:]
+                        newimage[y,:] = np.sum(image_newx[istart:istop+1,:],axis=0) - edges
+
+            if not total:
+                newimage = newimage / (xratio*yratio)
+
+        else:
+            
+            ## Sample y axis
+            ##---------------
+            for y in range(Ny):
+                rstart = y * yratio # float
+                istart = int(rstart) # int
+                frac1 = rstart - istart
+                rstop = rstart + yratio # float
+                if int(rstop)<oldNy:
+                    ## Full covered new pixels
+                    istop = int(rstop) # int
+                    frac2 = 1. - (rstop - istop)
+                else:
+                    ## Upper edge (value 0 for uncovered frac: frac2)
+                    istop = oldNy - 1 # int
+                    frac2 = (rstop - istop) - 1.
+    
+                ## Sample x axis
+                ##---------------
+                for x in range(Nx):
+                    new1 = x * xratio # float
+                    old1 = int(new1) # int
+                    f1 = new1 - old1
+                    new2 = new1 + xratio # float
+                    if int(new2)<oldNx:
+                        ## Full covered new pixels
+                        old2 = int(new2) # int
+                        f2 = 1. - (new2 - old2)
+                    else:
+                        ## Upper edge (value 0 for uncovered frac: f2)
+                        old2 = oldNx - 1 # int
+                        f2 = (new2 - old2) - 1. # out frac
+
+                    ## For each pixel (x,y) in new grid,
+                    ## find NaNs in old grid and
+                    ## recalculate nanbox[w,y,x] taking into account fractions
+                    for j in range(istop+1-istart):
+                        for i in range(old2+1-old1):
+                                
+                            ## old y grid
+                            if j==0:
+                                ybox = 1.-frac1
+                            elif j==istop-istart:
+                                if int(rstop)<oldNy:
+                                    ybox = 1.-frac2
+                                else:
+                                    ybox = rstop-istop-1.
+                            else:
+                                ybox = 1.
+                                
+                            ## old x grid
+                            if i==0:
+                                xbox = 1.-f1
+                            elif i==old2-old1:
+                                if int(new2)<oldNx:
+                                    xbox = 1.-f2
+                                else:
+                                    xbox = f2
+                            else:
+                                xbox = 1.
+                                
+                            ## old 2D grid
+                            if self.Ndim==3:
+                                for w in range(self.Nw):
+                                    if ~np.isnan(oldimage[w,istart+j,old1+i]):
+                                        newimage[w,y,x] += oldimage[w,istart+j,old1+i] * ybox * xbox
+                                        nanbox[w,y,x] += ybox * xbox
+                            else:
+                                if ~np.isnan(oldimage[istart+j,old1+i]):
+                                    newimage[y,x] += oldimage[istart+j,old1+i] * ybox * xbox
+                                    nanbox[y,x] += ybox * xbox
+
+            if not total:
+                newimage = np.where(nanbox==0, np.nan, newimage/nanbox)
+                izero = np.where(newimage==0)
+                newimage[izero] = np.nan
+            
         self.hdr = hdr
         self.im = newimage
-    
+        
+        if filOUT is not None:
+            write_fits(filOUT, self.hdr, self.im, self.wvl, self.wmod)
+
+        ## Update self variables
+        self.reinit(header=self.hdr, image=self.im, wave=self.wvl,
+                    wmod=self.wmod, verbose=self.verbose)
+
+        if self.verbose==True:
+            print('----------')
+            print('The actual map size is {} * {}'.format(self.Nx, self.Ny))
+            print('The actual pixel scale is {} * {} arcsec'.format(*pixscale))
+            print('\n <improve> Rebin [done]')
+            print('----------')
+            
         return newimage
 
 class Jy_per_pix_to_MJy_per_sr(improve):
@@ -479,7 +696,7 @@ class Jy_per_pix_to_MJy_per_sr(improve):
     ------ OUTPUT ------
     '''
     def __init__(self, filIN, filOUT=None, wmod=0, verbose=False):
-        super().__init__(filIN, wmod, verbose)
+        super().__init__(filIN, wmod=wmod, verbose=verbose)
 
         ## gmean( Jy/MJy / sr/pix )
         ufactor = np.sqrt(np.prod(1.e-6/pix2sr(1., self.cdelt)))
@@ -584,7 +801,7 @@ class icrop(improve):
                  sizpix=None, cenpix=None, sizval=None, cenval=None,
                  filUNC=None, dist=None, wmod=0, verbose=False):
         ## slicrop: slice 
-        super().__init__(filIN, wmod, verbose)
+        super().__init__(filIN, wmod=wmod, verbose=verbose)
         
         if dist=='norm':
             self.rand_norm(filUNC)
@@ -608,16 +825,17 @@ class irebin(improve):
     REBIN 2D image or 3D cube
     '''
     def __init__(self, filIN, filOUT=None,
-                 pixscale=None,
+                 pixscale=None, total=False, extrapol=False,
                  filUNC=None, dist=None, wmod=0, verbose=False):
-        super().__init__(filIN, wmod, verbose)
+        super().__init__(filIN, wmod=wmod, verbose=verbose)
         
         if dist=='norm':
             self.rand_norm(filUNC)
         elif dist=='splitnorm':
             self.rand_splitnorm(filUNC)
 
-        im_rebin = self.rebin(filOUT=filOUT, pixscale=pixscale)
+        im_rebin = self.rebin(filOUT=filOUT, pixscale=pixscale,
+                              total=total, extrapol=extrapol)
 
     def header(self):
         return self.hdr
@@ -627,11 +845,217 @@ class irebin(improve):
 
     def wave(self):
         return self.wvl
-        
+
 class imontage(improve):
     '''
     2D image or 3D cube montage toolkit
-    i means <improve>-based or initialize
+    Based on reproject v0.7.1 or later
+
+    ------ INPUT ------
+    reproject_function  resampling algorithms
+                          'interp': fastest (Default)
+                          'exact': slowest
+                          'adaptive': DeForest2004
+    tmpdir              tmp file path
+    verbose             (Default: False)
+    ------ OUTPUT ------
+    '''
+    def __init__(self, reproject_function='interp',
+                 tmpdir=None, verbose=False):
+        '''
+        self: func, path_tmp, verbose
+        '''
+        if reproject_function=='interp':
+            self.func = reproject_interp
+        elif reproject_function=='exact':
+            self.func = reproject_exact
+        elif reproject_function=='adaptive':
+            self.func = reproject_adaptive
+        else:
+            raise InputError('<imontage>',
+                             'Unknown reprojection !')
+        
+        ## Set path of tmp files
+        if tmpdir is None:
+            path_tmp = os.getcwd()+'/tmp_mtg/'
+        else:
+            path_tmp = tmpdir
+        if not os.path.exists(path_tmp):
+            os.makedirs(path_tmp)
+        self.path_tmp = path_tmp
+
+        ## Verbose
+        if verbose==False:
+            devnull = open(os.devnull, 'w')
+        else:
+            devnull = None
+        self.verbose = verbose
+        self.devnull = devnull
+    
+    def reproject(self, flist, refheader,
+                  filOUT=None, dist=None):
+        '''
+        Reproject 2D image or 3D cube
+
+        ------ INPUT ------
+        flist               FITS files to reproject
+        refheader           reprojection header
+        filOUT              output FITS file
+        dist                uncertainty distribution
+                              'norm' - N(0,1)
+                              'splitnorm' - SN(0,lam,lam*tau)
+        ------ OUTPUT ------
+        self.images         reprojected images
+        '''
+        flist = allist(flist)
+        
+        # if refheader is None:
+        #     raise InputError('<imontage>','No reprojection header!')
+        
+        images = []
+        for f in flist:
+            super().__init__(f)
+
+            ## Set tmp and out
+            filename = os.path.basename(f)
+            if filOUT is None:
+                filOUT = self.path_tmp+filename+'_rep'
+            self.file_rep = filOUT
+
+            ## Uncertainty propagation
+            if dist=='norm':
+                self.rand_norm(f+'_unc')
+            elif dist=='splitnorm':
+                self.rand_splitnorm([f+'_unc_N', f+'_unc_P'])
+            write_fits(self.file_rep, self.hdr, self.im, self.wvl, wmod=0)
+            
+            ## Do reprojection
+            ##-----------------
+            im = self.func(self.file_rep+fitsext, refheader)[0]
+            images.append(im)
+    
+            comment = "Reprojected by <imontage>. "
+            write_fits(filOUT, refheader, im, self.wvl, wmod=0,
+                       COMMENT=comment)
+        
+        return images
+
+    def reproject_mc(self, filIN, refheader,
+                     filOUT=None, dist=None, Nmc=0):
+        '''
+        Generate Monte-Carlo uncertainties for reprojected input file
+        '''
+        dataset = type('', (), {})()
+
+        hyperim = [] # [j,(w,)y,x]
+        for j in trange(Nmc+1, leave=False,
+                        desc='<imontage> Reprojection (MC)'):
+
+            if j==0:
+                im0 = self.reproject(filIN, refheader, filOUT, dist)[0]
+                file_rep = self.file_rep
+            else:
+                hyperim.append(self.reproject(filIN, refheader,
+                                              filOUT+'_'+str(j), dist)[0])
+        im0 = np.array(im0)
+        hyperim = np.array(hyperim)
+        unc = np.nanstd(hyperim, axis=0)
+        comment = "Reprojected by <imontage>. "
+
+        if Nmc>0:
+            write_fits(file_rep+'_unc', refheader, unc, self.wvl,
+                       COMMENT=comment)
+
+        dataset.im0 = im0
+        dataset.unc = unc
+        dataset.hyperim = hyperim
+
+        return dataset
+
+    def coadd(self, flist, refheader,
+              filOUT=None, dist=None, Nmc=0):
+        '''
+        Reproject and coadd
+        '''
+        flist = allist(flist)
+        dataset = type('', (), {})()
+        comment = "Created by <imontage>"
+
+        slist = [] # slist[j,if,iw]
+        for j in trange(Nmc+1, leave=False,
+                        desc='<imontage> Slicing... (MC)'):
+            sl = [] # sl[f,w]
+            for f in flist:
+                super().__init__(f)
+
+                if j==0:
+                    ## Set tmp and out
+                    filename = os.path.basename(f)
+                    if filOUT is None:
+                        filOUT = self.path_tmp+filename+'_rep'
+                        
+                    coadd_tmp = self.path_tmp+filename+'/'
+                    if not os.path.exists(coadd_tmp):
+                        os.makedirs(coadd_tmp)
+                        
+                    sl.append(self.slice(coadd_tmp+'slice', ext=fitsext))
+                else:
+                    if dist=='norm':
+                        self.rand_norm(f+'_unc')
+                    elif dist=='splitnorm':
+                        self.rand_splitnorm([f+'_unc_N', f+'_unc_P'])
+                        
+                    sl.append(self.slice(coadd_tmp+'slice',
+                                         postfix='_'+str(j), ext=fitsext))
+            slist.append(np.array(sl))
+        slist = np.array(slist)
+        
+        if self.Nw is None:
+            Nw = 1
+        else:
+            Nw = self.Nw
+        superim = []
+        for j in trange(Nmc+1, leave=False,
+                        desc='<imontage> Coadding... (MC)'):
+            if j==0:
+                im = []
+                for iw in range(Nw):
+                    im.append(reproject_and_coadd(slist[j,:,iw], refheader,
+                                                  reproject_function=self.func)[0])
+                im = np.array(im)
+
+                write_fits(filOUT, refheader, im, self.wvl, wmod=0,
+                           COMMENT=comment)
+            else:
+                hyperim = []
+                for iw in range(Nw):
+                    hyperim.append(reproject_and_coadd(slist[j,:,iw], refheader,
+                                                       reproject_function=self.func)[0])
+                superim.append(np.array(hyperim))
+        superim = np.array(superim)
+        unc = np.nanstd(superim, axis=0)
+
+        if Nmc>0:
+            write_fits(filOUT+'_unc', refheader, unc, self.wvl, wmod=0,
+                       COMMENT=comment)
+
+        dataset.wvl = self.wvl
+        dataset.im = im
+        dataset.unc = unc
+        dataset.superim = superim
+        
+        return dataset
+
+    def clean(self, filIN=None):
+        if filIN is not None:
+            fclean(filIN)
+        else:
+            fclean(self.path_tmp)
+            
+class imontage_v0_4(improve):
+    '''
+    2D image or 3D cube montage toolkit
+    (Archived reproject v0.4 version)
 
     ------ INPUT ------
     flist               FITS file (list, cf improve.filIN)
@@ -653,7 +1077,7 @@ class imontage(improve):
         '''
         ## Set path of tmp files
         if tmpdir is None:
-            path_tmp = os.getcwd()+'/tmp_proc/'
+            path_tmp = os.getcwd()+'/tmp_mtg/'
         else:
             path_tmp = tmpdir
         if not os.path.exists(path_tmp):
@@ -798,7 +1222,7 @@ class imontage(improve):
         if dist=='norm':
             self.rand_norm(filIN+'_unc')
         elif dist=='splitnorm':
-            self.rand_splitnorm([filIN[i]+'_unc_N', filIN[i]+'_unc_P'])
+            self.rand_splitnorm([filIN+'_unc_N', filIN+'_unc_P'])
         
         ## Set reprojection tmp path
         ##---------------------------
@@ -1606,10 +2030,9 @@ class respect(improve):
     '''
     REstore SPECTra
     '''
-    def __init__(self, verbose=False, tmpdir=None):
+    def __init__(self, tmpdir=None, verbose=False):
         '''
         self: path_tmp, verbose
-        (filIN, wmod, hdr, w, Ndim, Nx, Ny, Nw, im, wvl)
         '''
         if verbose==False:
             devnull = open(os.devnull, 'w')
