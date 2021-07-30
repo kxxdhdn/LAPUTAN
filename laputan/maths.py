@@ -5,7 +5,7 @@
 
 Maths
 
-    f_lin, f_lin1, f_lin0, gaussian, gaussian2D,
+    f_lin, f_lin0, f_lin1, gaussian, gaussian2D,
     rms, nanrms, std, nanstd, nanavg, bsplinterpol
 
 """
@@ -20,23 +20,17 @@ def f_lin(x, A, B):
     '''
     return A * x + B
 
-def f_lin1(x, B):
-    '''
-    Y = x + B
-    '''
-    return x + B
-
 def f_lin0(x, A):
     '''
     Y = A * x
     '''
     return A * x
 
-def f_lin_p(x, A, B):
+def f_lin1(x, B):
     '''
-    Y = abs(A) * x + B
+    Y = x + B
     '''
-    return abs(A) * x + B
+    return x + B
 
 def gaussian(x, mu, sigma):
     '''

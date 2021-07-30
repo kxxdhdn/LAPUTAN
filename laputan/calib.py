@@ -6,7 +6,7 @@
 Calibration
 
     intercalib:
-        wcenter, synthetic_photometry, specorrect
+        read_filter, synthetic_photometry, correct_spec
     photometry_profile
 
 """
@@ -57,21 +57,38 @@ class intercalib:
             self.im = ds.data
             self.wvl = ds.wave
 
-    def wcenter(self, filt):
+    def read_filter(self, filt, w_spec=None):
         '''
         Return center wavelength of the filters
+        The input offset corresponds to the integrated broad band value (bboff).
+        Suppose a flat spectral offset to correct the spectral value (specoff).
+        Return specoff/bboff
 
         ------ INPUT ------
         filt                photometry names (string, tuple or list)
+        w_spec              wavelengths (Default: None, take w_grid of filt[0])
         ------ OUTPUT ------
-        wcen                center wavelength
+        self
+          wcen                center wavelength
+          specoff_ov_bboff    spectral/broad band offset ratio
         '''
         ## Convert all format phot names to list
         filt = allist(filt)
 
-        wave = np.arange(.01, 40, .1)
-        flux = np.ones(len(wave))
-        flux = flux[:,np.newaxis,np.newaxis]
+        if w_spec is None:
+            w_spec = read_hdf5(croot+'/lib/data/filt_'+filt[0],
+                               'Filter wavelength (microns)')
+        for phot in filt:
+            w_grid = read_hdf5(croot+'/lib/data/filt_'+phot,
+                               'Filter wavelength (microns)')
+            if w_spec[0]>w_grid[0] or w_spec[-1]<w_grid[-1]:
+                warnings.warn('Synthetic photometry of {} can be underestimated' \
+                              'due to uncovered wavelengths'.format(phot))
+        ## Insert 2 wvl (0.01 um & w_spec[0]-0.01 um) with 0 value
+        wave = np.insert(w_spec, 0, (.01, w_spec[0]-.01))
+        Fnu_uni = np.ones(len(wave))
+        Fnu_uni[:2] = 0
+        flux = Fnu_uni[:,np.newaxis,np.newaxis]
 
         ## Write input.h5
         ##----------------
@@ -90,14 +107,14 @@ class intercalib:
         ##----------------
         fortOUT = os.getcwd()+'/synthetic_photometry_output'
 
-        wcen = read_hdf5(fortOUT, 'Central wavelength (microns)')
+        self.wcen = read_hdf5(fortOUT, 'Central wavelength (microns)')
+        Fnu_filt = read_hdf5(fortOUT, 'Flux (x.Hz-1)')[:,0,0]
+        self.specoff_ov_bboff = 1. / Fnu_filt
 
         ## Clean temperary h5 files
         ##--------------------------
         SP.call('rm -rf '+fortIN+h5ext, shell=True, cwd=os.getcwd())
         SP.call('rm -rf '+fortOUT+h5ext, shell=True, cwd=os.getcwd())
-
-        return wcen
 
     def synthetic_photometry(self, filt, w_spec=None, Fnu_spec=None, 
                              extrapoff=True, verbose=False):
@@ -197,15 +214,14 @@ class intercalib:
 
         return ds
 
-    def specorrect(self, factor=1., offset=0., w_spec=None, Fnu_spec=None,
-                   wlim=(None,None), ylim=(None,None), xlim=(None,None),
-                   filOUT=None):
+    def correct_spec(self, gain=1., offset=0., w_spec=None, Fnu_spec=None,
+                     wlim=(None,None), ylim=(None,None), xlim=(None,None),
+                     filOUT=None):
         '''
-        Correct spectra 
-        
+        Correct spectra
         
         ------ INPUT ------
-        factor              scalar or ndarray (Default: 1.)
+        gain                scalar or ndarray (Default: 1.)
         offset              scalar or ndarray (Default: 0.)
         w_spec              wavelengths (Default: None - via filIN)
         Fnu_spec            spectra (Default: None - via filIN)
@@ -214,7 +230,7 @@ class intercalib:
         xlim                x limits (Default: (None,None))
         filOUT              overwrite fits file (Default: None)
         ------ OUTPUT ------
-        new_spec            new_spec = factor * Fnu_spec + offset
+        new_spec            new_spec = gain * Fnu_spec + offset
         '''
         ## Input is a FITS file
         if self.filIN is not None:
@@ -228,6 +244,18 @@ class intercalib:
             Fnu_spec = Fnu_spec[:,np.newaxis,np.newaxis]
         else:
             Ndim = 3
+        Nw, Ny, Nx = Fnu_spec.shape
+
+        if np.isscalar(gain):
+            a = np.array(gain)
+            a = np.array(a[np.newaxis,np.newaxis])
+            a = np.repeat(a[:,:], Ny, axis=0)
+            a = np.repeat(a[:,:], Nx, axis=1)
+        if np.isscalar(offset):
+            b = np.array(offset)
+            b = np.array(b[np.newaxis,np.newaxis])
+            b = np.repeat(b[:,:], Ny, axis=0)
+            b = np.repeat(b[:,:], Nx, axis=1)
 
         ## Truncate wavelengths
         if wlim[0] is None:
@@ -248,7 +276,8 @@ class intercalib:
         for k, lam in enumerate(w_spec):
             if lam>=wmin and lam<=wmax:
                 new_spec[k,ymin:ymax,xmin:xmax] = \
-                    factor * Fnu_spec[k,ymin:ymax,xmin:xmax] + offset
+                    a[ymin:ymax,xmin:xmax] * Fnu_spec[k,ymin:ymax,xmin:xmax] \
+                    + b[ymin:ymax,xmin:xmax]
 
         ## Reform outputs
         if Ndim==1:
@@ -311,10 +340,10 @@ class spec2phot(intercalib):
         self.Fsyn = Fsyn[0]
         self.Fsig = Fsig[0][0]
 
-        self.factor = F_phot / self.Fsyn
+        self.gain = F_phot / self.Fsyn
 
-    def calib_factor(self):
-        return self.factor
+    def calib_gain(self):
+        return self.gain
 
     def image(self):
         return self.Fsyn

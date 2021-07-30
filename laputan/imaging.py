@@ -949,7 +949,7 @@ class imontage(improve):
 
         hyperim = [] # [j,(w,)y,x]
         for j in trange(Nmc+1, leave=False,
-                        desc='<imontage> Reprojection (MC)'):
+                        desc='<imontage> Reprojection [MC]'):
 
             if j==0:
                 im0 = self.reproject(filIN, refheader, filOUT, dist)[0]
@@ -983,7 +983,7 @@ class imontage(improve):
 
         slist = [] # slist[j,if,iw]
         for j in trange(Nmc+1, leave=False,
-                        desc='<imontage> Slicing... (MC)'):
+                        desc='<imontage> Slicing... [MC]'):
             sl = [] # sl[f,w]
             for f in flist:
                 super().__init__(f)
@@ -1016,7 +1016,7 @@ class imontage(improve):
             Nw = self.Nw
         superim = []
         for j in trange(Nmc+1, leave=False,
-                        desc='<imontage> Coadding... (MC)'):
+                        desc='<imontage> Coadding... [MC]'):
             if j==0:
                 im = []
                 for iw in range(Nw):
@@ -1400,7 +1400,7 @@ class imontage_v0_4(improve):
         comment = "Created by <imontage>"
 
         for j in trange(Nmc+1, leave=False,
-                        desc='<imontage> Coadd (MC)'):
+                        desc='<imontage> Coadd [MC]'):
             sl = []
             if j==0:
                 for f in flist:
@@ -1436,7 +1436,7 @@ class imontage_v0_4(improve):
             Nw = self.Nw
         superim = []
         for j in trange(Nmc+1, leave=False,
-                        desc='<imontage> Coadd (MC)'):
+                        desc='<imontage> Coadd [MC]'):
             if j==0:
                 im = []
                 for i in range(Nw):
@@ -2257,7 +2257,7 @@ class sextract(improve):
 
         ------ INPUT ------
         Nx                  number of (identical) pixels to fit slit width
-                              Default: 0, 3 for Ns and 2 for Nh
+                              Default: 0 == (3 for Ns and 2 for Nh)
         Ny                  number of pixels in spatial direction (Max=32)
                               Y axis in N3 frame (X axis in focal plane arrays)
         Nsub                number of subslits

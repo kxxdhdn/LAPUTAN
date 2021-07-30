@@ -25,6 +25,15 @@ Anaconda's environment control is recommanded.
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@cea.fr
 * Version log
+** v1.2.1 (20210730)
+- ~arrays.closest~
+  + Added kw ~side~ (default: None)
+- ~calib.intercalib~
+  + Replaced ~specorrect~ kw ~factor~ by ~gain~
+  + Non-scalar ~gain~ and ~offset~
+  + Renamed ~specorrect~ as ~correct_spec~
+  + Extended ~wcenter~ to ~read_filter~ considering discrepancy between broad band offset and spectral offset
+- Removed ~maths.f_lin_p~
 ** v1.2 (20210722)
 - Rewrote ~imaging.imontage~
   + Added ~reproject_function~ kw
@@ -35,6 +44,9 @@ Anaconda's environment control is recommanded.
   + Corrected ~self.hdr~ and added ~self.hdred~
   + Added ~reinit~ (used for auto-updating after ~crop~ and ~rebin~)
   + Rewrote ~rebin~ with fractional rebinning and NaN extrapolation
+- ~astrom.fixwcs~
+  + Added kw ~mode~ with ~'red_dim'~ (default) and ~'del_sip'~ modes
+- Added ~wcs~ to ~inout.read_fits~ output dataset
 ** v1.1.6 (20210701)
 - Added ~maths.f_lin_p~
 - ~imaging.iswarp~

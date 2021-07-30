@@ -23,8 +23,15 @@ from laputan.calib import (intercalib, photometry_profile,
 print('\n TEST intercalib ')
 print('-----------------')
 phots = 'IRAC1', 'IRAC4'
-wcen = intercalib().wcenter(phots)
-print('Wavelength center of the filters (IRAC1, IRAC4): ', wcen)
+ic = intercalib()
+ic.read_filter(phots)
+print('Wavelength center of the filters (IRAC1, IRAC4): ', ic.wcen)
+print('spec off / broad band off: ', ic.specoff_ov_bboff)
+phots = 'MIPS1'
+ic = intercalib()
+ic.read_filter(phots)
+print('Wavelength center of the filters (MIPS1): ', ic.wcen)
+print('spec off / broad band off: ', ic.specoff_ov_bboff)
 
 print('* via FITS file *')
 c1 = intercalib(datdir+'M82')
@@ -44,8 +51,8 @@ print('Fnu_filt = ', sp2.Fnu_filt)
 print('wcen = ', sp2.wcen)
 print('smat = ', sp2.smat)
 
-print('\n TEST specorrect ')
-print('-----------------')
+print('\n TEST correct_spec ')
+print('-------------------')
 a1 = 1.5 # slope
 b1 = -200. # offset
 a2 = .5
@@ -59,8 +66,9 @@ plt.subplots_adjust(left=.1, bottom=.05, \
 ax1, ax2 = axes
 
 print('* via FITS file *')
-new_spec11 = c1.specorrect(factor=a1, offset=b1, wlim=wlim11)
-new_spec12 = c1.specorrect(factor=a2, offset=b2, wlim=wlim12)
+
+new_spec11 = c1.correct_spec(gain=a1, offset=b1, wlim=wlim11)
+new_spec12 = c1.correct_spec(gain=a2, offset=b2, wlim=wlim12)
 ax1.plot(c1.wvl, c1.im[:,y,x], c='k', label='y')
 ax1.plot(c1.wvl, new_spec11[:,y,x], c='y',
          label='{}*y+{}, x=({},{})'.format(a1,b1,wlim11[0],wlim11[1]))
@@ -69,14 +77,14 @@ ax1.plot(c1.wvl, new_spec12[:,y,x], c='g',
 ax1.legend(loc='upper left')
 
 print('* via data array *')
-new_spec2 = c2.specorrect(factor=a1, offset=b1, w_spec=wave, Fnu_spec=spec, wlim=wlim2)
+new_spec2 = c2.correct_spec(gain=a1, offset=b1, w_spec=wave, Fnu_spec=spec, wlim=wlim2)
 ax2.plot(wave, spec, c='k', label='y')
 ax2.plot(wave, new_spec2, c='y',
          label='{}*y+{}, x=({},{})'.format(a1,b1,wlim2[0],wlim2[1]))
 ax2.legend(loc='upper left')
 
-fig.savefig(outdir+'calib_specorrect.png')
-print('See ./out/calib_specorrect.png [Done]')
+fig.savefig(outdir+'calib_correct_spec.png')
+print('See ./out/calib_correct_spec.png [Done]')
 
 print('\n TEST photometry_profile ')
 print('-------------------------')
