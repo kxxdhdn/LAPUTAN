@@ -193,7 +193,8 @@ rsp = respect()
 
 flist = [datdir+'M82_SL1', datdir+'M82_SL2']
 uncl = [f+'_unc' for f in flist]
-rsp.concat(flist, filOUT=outdir+'M82_SL_concat')
+rsp.concat(flist, filOUT=outdir+'M82_SL_concat',
+           keepfrag=False, cropedge=True)
 wvl = rsp.wvl_concat
 data = rsp.im_concat[:,0,0]
 rsp.concat(uncl, filOUT=outdir+'M82_SL_concat_unc')

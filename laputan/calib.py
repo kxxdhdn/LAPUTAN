@@ -66,7 +66,7 @@ class intercalib:
 
         ------ INPUT ------
         filt                photometry names (string, tuple or list)
-        w_spec              wavelengths (Default: None, take w_grid of filt[0])
+        w_spec              wavelengths (Default: None - via filIN)
         ------ OUTPUT ------
         self
           wcen                center wavelength
@@ -75,9 +75,8 @@ class intercalib:
         ## Convert all format phot names to list
         filt = allist(filt)
 
-        if w_spec is None:
-            w_spec = read_hdf5(croot+'/lib/data/filt_'+filt[0],
-                               'Filter wavelength (microns)')
+        if self.filIN is not None:
+            w_spec = self.wvl
         for phot in filt:
             w_grid = read_hdf5(croot+'/lib/data/filt_'+phot,
                                'Filter wavelength (microns)')
@@ -216,7 +215,7 @@ class intercalib:
 
     def correct_spec(self, gain=1., offset=0., w_spec=None, Fnu_spec=None,
                      wlim=(None,None), ylim=(None,None), xlim=(None,None),
-                     filOUT=None):
+                     header=None, filOUT=None):
         '''
         Correct spectra
         
@@ -251,11 +250,15 @@ class intercalib:
             a = np.array(a[np.newaxis,np.newaxis])
             a = np.repeat(a[:,:], Ny, axis=0)
             a = np.repeat(a[:,:], Nx, axis=1)
+        else:
+            a = gain
         if np.isscalar(offset):
             b = np.array(offset)
             b = np.array(b[np.newaxis,np.newaxis])
             b = np.repeat(b[:,:], Ny, axis=0)
             b = np.repeat(b[:,:], Nx, axis=1)
+        else:
+            b = offset
 
         ## Truncate wavelengths
         if wlim[0] is None:
@@ -284,7 +287,9 @@ class intercalib:
             new_spec = new_spec[:,0,0]
                     
         if filOUT is not None:
-            write_fits(filOUT, self.hdr, new_spec, wave=w_spec)
+            if header is None:
+                header = self.hdr
+            write_fits(filOUT, header, new_spec, wave=w_spec)
         
         return new_spec
 

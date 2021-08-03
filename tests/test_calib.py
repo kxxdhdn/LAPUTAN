@@ -23,13 +23,14 @@ from laputan.calib import (intercalib, photometry_profile,
 print('\n TEST intercalib ')
 print('-----------------')
 phots = 'IRAC1', 'IRAC4'
+w_spec = np.arange(1,20,.1)
 ic = intercalib()
-ic.read_filter(phots)
+ic.read_filter(phots, w_spec)
 print('Wavelength center of the filters (IRAC1, IRAC4): ', ic.wcen)
 print('spec off / broad band off: ', ic.specoff_ov_bboff)
 phots = 'MIPS1'
 ic = intercalib()
-ic.read_filter(phots)
+ic.read_filter(phots, w_spec)
 print('Wavelength center of the filters (MIPS1): ', ic.wcen)
 print('spec off / broad band off: ', ic.specoff_ov_bboff)
 

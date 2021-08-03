@@ -25,6 +25,12 @@ Anaconda's environment control is recommanded.
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@cea.fr
 * Version log
+** v1.2.2 (20210803)
+- ~calib.intercalib~
+  + Corrected ~correct_spec~ non-scalar gain/offset input
+- ~imaging.concatenante~ (Idem. for ~respect.concat~)
+  + Added kw ~keepfrag~, ~cropedge~
+  + Corrected indices with sided ~closest~
 ** v1.2.1 (20210730)
 - ~arrays.closest~
   + Added kw ~side~ (default: None)

@@ -1032,6 +1032,9 @@ class imontage(improve):
                     hyperim.append(reproject_and_coadd(slist[j,:,iw], refheader,
                                                        reproject_function=self.func)[0])
                 superim.append(np.array(hyperim))
+
+                write_fits(filOUT+'_'+str(j), refheader, im, self.wvl, wmod=0,
+                           COMMENT=comment)
         superim = np.array(superim)
         unc = np.nanstd(superim, axis=0)
 
@@ -1746,8 +1749,7 @@ class iswarp(improve):
                         shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
                     edgeimage = read_fits(path_tmp+'coadd').data
                     newweight = read_fits(path_tmp+'coadd.weight').data
-                    edgeidx = np.ma.array(oldweight, 
-                        mask=np.logical_and(oldweight==0, newweight!=0)).mask
+                    edgeidx = np.logical_and(oldweight==0, newweight!=0)
                     if edgeidx.any():
                         newimage[edgeidx] = edgeimage[edgeidx]
 
@@ -1757,8 +1759,7 @@ class iswarp(improve):
                             shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
                         edgeimage = read_fits(path_tmp+'coadd').data
                         newweight = read_fits(path_tmp+'coadd.weight').data
-                        edgeidx = np.ma.array(oldweight, 
-                            mask=np.logical_and(oldweight==0, newweight!=0)).mask
+                        edgeidx = np.logical_and(oldweight==0, newweight!=0)
                         if edgeidx.any():
                             newimage[edgeidx] = edgeimage[edgeidx]
 
@@ -1768,8 +1769,7 @@ class iswarp(improve):
                                 shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
                             edgeimage = read_fits(path_tmp+'coadd').data
                             newweight = read_fits(path_tmp+'coadd.weight').data
-                            edgeidx = np.ma.array(oldweight, 
-                                mask=np.logical_and(oldweight==0, newweight!=0)).mask
+                            edgeidx = np.logical_and(oldweight==0, newweight!=0)
                             if edgeidx.any():
                                 newimage[edgeidx] = edgeimage[edgeidx]
             
@@ -1781,7 +1781,7 @@ class iswarp(improve):
             old_pixel_fov = abs(oldcdelt[0]*oldcdelt[1])
             new_pixel_fov = abs(newcdelt[0]*newcdelt[1])
             newimage = newimage * old_pixel_fov/new_pixel_fov
-            ma_zero = np.ma.array(newimage, mask=(newimage==0)).mask
+            ma_zero = (newimage==0)
             newimage[ma_zero] = np.nan
             # write_fits(path_comb+'coadd_'+str(k), newheader, newimage)
             # tqdm.write(str(old_pixel_fov))
@@ -1796,10 +1796,7 @@ class iswarp(improve):
         hyperimage = np.array(hyperimage)
 
         if cropedge:
-            ## coadd.ref.fits here is 3D, different from that created by SWarp
-            write_fits(path_tmp+'coadd.ref', newheader, hyperimage, wvl)
-            
-            reframe = improve(path_tmp+'coadd.ref')
+            reframe = improve(header=newheader, image=hyperimage, wave=wvl)
             xlist = []
             for x in range(reframe.Nx):
                 if not np.isnan(reframe.im[:,:,x]).all():
@@ -1880,7 +1877,7 @@ class iconvolve(improve):
     def spitzer_irs(self):
         '''
         Spitzer/IRS PSF profil
-        [ref]
+        [REF]
         Pereira-Santaella, Miguel, Almudena Alonso-Herrero, George H.
         Rieke, Luis Colina, Tanio Díaz-Santos, J.-D. T. Smith, Pablo G.
         Pérez-González, and Charles W. Engelbracht. “Local Luminous
@@ -1888,6 +1885,7 @@ class iconvolve(improve):
         Spitzer Infrared Spectrograph.” The Astrophysical Journal
         Supplement Series 188, no. 2 (June 1, 2010): 447.
         doi:10.1088/0067-0049/188/2/447.
+        https://iopscience.iop.org/article/10.1088/0067-0049/188/2/447/pdf
         '''
         sim_par_wave = [0, 13.25, 40.]
         sim_par_fwhm = [2.8, 3.26, 10.1]
@@ -2052,9 +2050,11 @@ class respect(improve):
         # self.path_tmp = path_tmp
 
     def concat(self, flist, filOUT=None, comment=None,
-               wsort=False, wrange=None):
+               wsort=False, wrange=None,
+               keepfrag=True, cropedge=False):
         '''
         wsort=True can be used with wclean
+        When wsort=False, wrange is used to avoid wavelength overlapping
 
         '''
         if wrange is None:
@@ -2083,24 +2083,55 @@ class respect(improve):
         else:
             for f in flist:
                 super().__init__(f)
-                imin = closest(wmin, self.wvl[0])
-                imax = closest(wmax, self.wvl[-1])
+                imin = closest(wmin, self.wvl[0], side='right')
+                imax = closest(wmax, self.wvl[-1], side='left')
                 iwi = 0
                 iws = -1
                 for i, w in enumerate(self.wvl[:-2]):
-                    if w<wrange[imin][0] and self.wvl[i+1]>wrange[imin][0]:
+                    if w<wmin[imin] and self.wvl[i+1]>wmin[imin]:
                         iwi = i+1
-                    if w<wrange[imax][1] and self.wvl[i+1]>wrange[imax][0]:
-                        iws = i
+                    if w<wmax[imax] and self.wvl[i+1]>wmax[imax]:
+                        iws = i+1
                 data.append(self.im[iwi:iws])
                 wave.append(self.wvl[iwi:iws])
 
-        data = np.concatenate(data)
+        data = np.concatenate(data, axis=0)
         wave = np.concatenate(wave)
         hdr = self.hdr
+        ## Sort
         ind = sorted(range(len(wave)), key=wave.__getitem__)
-        wave = np.sort(wave)
+        # wave = np.sort(wave)
+        wave = wave[ind]
         data = data[ind]
+        ## NaN mask
+        if not keepfrag:
+            ma_any = np.isnan(data).any(axis=0)
+            for k in range(len(wave)):
+                data[k][ma_any] = np.nan
+            
+        if cropedge:
+            reframe = improve(header=hdr, image=data, wave=wave)
+            xlist = []
+            for x in range(reframe.Nx):
+                if not np.isnan(reframe.im[:,:,x]).all():
+                    xlist.append(x)
+            ylist = []
+            for y in range(reframe.Ny):
+                if not np.isnan(reframe.im[:,y,:]).all():
+                    ylist.append(y)
+            xmin = min(xlist)
+            xmax = max(xlist)+1
+            ymin = min(ylist)
+            ymax = max(ylist)+1
+            dx = xmax-xmin
+            dy = ymax-ymin
+            x0 = xmin+dx/2
+            y0 = ymin+dy/2
+        
+            reframe.crop(sizpix=(dx,dy), cenpix=(x0,y0))
+            data = reframe.im
+            hdr = reframe.hdr
+            
         self.wvl_concat = wave
         self.im_concat = data
 
@@ -2679,8 +2710,7 @@ def hswarp(oldimage, oldheader, refheader,
                     shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
             edgeimage = read_fits(path_tmp+'coadd').data
             newweight = read_fits(path_tmp+'coadd.weight').data
-            edgeidx = np.ma.array(oldweight, 
-                mask=np.logical_and(oldweight==0, newweight!=0)).mask
+            edgeidx = np.logical_and(oldweight==0, newweight!=0)
             if edgeidx.any():
                 newimage[edgeidx] = edgeimage[edgeidx]
 
@@ -2690,8 +2720,7 @@ def hswarp(oldimage, oldheader, refheader,
                     shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
                 edgeimage = read_fits(path_tmp+'coadd').data
                 newweight = read_fits(path_tmp+'coadd.weight').data
-                edgeidx = np.ma.array(oldweight, 
-                    mask=np.logical_and(oldweight==0, newweight!=0)).mask
+                edgeidx = np.logical_and(oldweight==0, newweight!=0)
                 if edgeidx.any():
                     newimage[edgeidx] = edgeimage[edgeidx]
 
@@ -2701,8 +2730,7 @@ def hswarp(oldimage, oldheader, refheader,
                             shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
                     edgeimage = read_fits(path_tmp+'coadd').data
                     newweight = read_fits(path_tmp+'coadd.weight').data
-                    edgeidx = np.ma.array(oldweight, 
-                        mask=np.logical_and(oldweight==0, newweight!=0)).mask
+                    edgeidx = np.logical_and(oldweight==0, newweight!=0)
                     if edgeidx.any():
                         newimage[edgeidx] = edgeimage[edgeidx]
 
@@ -2713,7 +2741,7 @@ def hswarp(oldimage, oldheader, refheader,
     old_pixel_fov = abs(oldcdelt[0]*oldcdelt[1])
     new_pixel_fov = abs(refcdelt[0]*refcdelt[1])
     newimage = newimage * old_pixel_fov/new_pixel_fov
-    ma_zero = np.ma.array(newimage, mask=(newimage==0)).mask
+    ma_zero = (newimage==0)
     newimage[ma_zero] = np.nan
     # print('-------------------')
     # print(old_pixel_fov/new_pixel_fov)
@@ -2730,9 +2758,11 @@ def hswarp(oldimage, oldheader, refheader,
     return ds
 
 def concatenate(flist, filOUT=None, comment=None,
-                wsort=False, wrange=None):
+                wsort=False, wrange=None,
+                keepfrag=True, cropedge=False):
     '''
     wsort=True can be used with wclean
+    When wsort=False, wrange is used to avoid wavelength overlapping
 
     '''
     dataset = type('', (), {})()
@@ -2763,27 +2793,58 @@ def concatenate(flist, filOUT=None, comment=None,
     else:
         for f in flist:
             ds = read_fits(f)
-            imin = closest(wmin, ds.wave[0])
-            imax = closest(wmax, ds.wave[-1])
+            imin = closest(wmin, ds.wave[0], side='right')
+            imax = closest(wmax, ds.wave[-1], side='left')
             iwi = 0
             iws = -1
             for i, w in enumerate(ds.wave[:-2]):
-                if w<wrange[imin][0] and ds.wave[i+1]>wrange[imin][0]:
+                if w<wmin[imin] and ds.wave[i+1]>wmin[imin]:
                     iwi = i+1
-                if w<wrange[imax][1] and ds.wave[i+1]>wrange[imax][0]:
-                    iws = i
+                if w<wmax[imax] and ds.wave[i+1]>wmax[imax]:
+                    iws = i+1
             data.append(ds.data[iwi:iws])
             wave.append(ds.wave[iwi:iws])
 
-    data = np.concatenate(data)
+    data = np.concatenate(data, axis=0)
     wave = np.concatenate(wave)
-    hdr = ds.header    
+    hdr = ds.header
+    ## Sort
     ind = sorted(range(len(wave)), key=wave.__getitem__)
-    wave = np.sort(wave)
+    # wave = np.sort(wave)
+    wave = wave[ind]
     data = data[ind]
+    ## NaN mask
+    if not keepfrag:
+        ma_any = np.isnan(data).any(axis=0)
+        for k in range(len(wave)):
+            data[k][ma_any] = np.nan
+
+    if cropedge:
+        reframe = improve(header=hdr, image=data, wave=wave)
+        xlist = []
+        for x in range(reframe.Nx):
+            if not np.isnan(reframe.im[:,:,x]).all():
+                xlist.append(x)
+        ylist = []
+        for y in range(reframe.Ny):
+            if not np.isnan(reframe.im[:,y,:]).all():
+                ylist.append(y)
+        xmin = min(xlist)
+        xmax = max(xlist)+1
+        ymin = min(ylist)
+        ymax = max(ylist)+1
+        dx = xmax-xmin
+        dy = ymax-ymin
+        x0 = xmin+dx/2
+        y0 = ymin+dy/2
+
+        reframe.crop(sizpix=(dx,dy), cenpix=(x0,y0))
+        data = reframe.im
+        hdr = reframe.hdr
+
     dataset.wave = wave
     dataset.data = data
-
+    
     ## Write FITS file
     if filOUT is not None:
         write_fits(filOUT, hdr, data, wave, COMMENT=comment)
