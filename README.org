@@ -25,6 +25,8 @@ Anaconda's environment control is recommanded.
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@cea.fr
 * Version log
+** v1.2.3 (20210817)
+- ~imaging.imontage~: Corrected bugs in ~coadd~ Monte-Carlo uncertainty propagation
 ** v1.2.2 (20210803)
 - ~calib.intercalib~
   + Corrected ~correct_spec~ non-scalar gain/offset input

@@ -988,16 +988,16 @@ class imontage(improve):
             for f in flist:
                 super().__init__(f)
 
+                ## Set tmp and out
+                filename = os.path.basename(f)
+                if filOUT is None:
+                    filOUT = self.path_tmp+filename+'_rep'
+                        
+                coadd_tmp = self.path_tmp+filename+'/'
+                if not os.path.exists(coadd_tmp):
+                    os.makedirs(coadd_tmp)
+                        
                 if j==0:
-                    ## Set tmp and out
-                    filename = os.path.basename(f)
-                    if filOUT is None:
-                        filOUT = self.path_tmp+filename+'_rep'
-                        
-                    coadd_tmp = self.path_tmp+filename+'/'
-                    if not os.path.exists(coadd_tmp):
-                        os.makedirs(coadd_tmp)
-                        
                     sl.append(self.slice(coadd_tmp+'slice', ext=fitsext))
                 else:
                     if dist=='norm':
@@ -1033,7 +1033,7 @@ class imontage(improve):
                                                        reproject_function=self.func)[0])
                 superim.append(np.array(hyperim))
 
-                write_fits(filOUT+'_'+str(j), refheader, im, self.wvl, wmod=0,
+                write_fits(filOUT+'_'+str(j), refheader, hyperim, self.wvl, wmod=0,
                            COMMENT=comment)
         superim = np.array(superim)
         unc = np.nanstd(superim, axis=0)
