@@ -45,6 +45,7 @@ from astropy.table import Table
 from reproject import reproject_interp, reproject_exact, reproject_adaptive
 from reproject.mosaicking import reproject_and_coadd
 import subprocess as SP
+import warnings
 
 ## Local
 from utilities import InputError
@@ -1533,7 +1534,7 @@ class iswarp(improve):
             ## Define coadd frame via refheader
             else:
                 if center is not None or pixscale is not None:
-                    print('Warning: The keywords center and pixscale are dumb. ')
+                    warnings.warn('The keywords center and pixscale are dumb. ')
 
                 self.refheader = refheader
         else:
@@ -1583,7 +1584,7 @@ class iswarp(improve):
             ## via reproject with refheader (custom anisotropic scaling matrix)
             if refheader is not None:
                 if center is not None or pixscale is not None:
-                    print('Warning: The keywords center and pixscale are dumb. ')
+                    warnings.warn('The keywords center and pixscale are dumb. ')
 
                 super().__init__(path_tmp+'coadd.ref')
                 pix_old = [[0, 0]]
@@ -2083,8 +2084,8 @@ class respect(improve):
         else:
             for f in flist:
                 super().__init__(f)
-                imin = closest(wmin, self.wvl[0], side='right')
-                imax = closest(wmax, self.wvl[-1], side='left')
+                imin = closest(wmin, self.wvl[0])
+                imax = closest(wmax, self.wvl[-1])
                 iwi = 0
                 iws = -1
                 for i, w in enumerate(self.wvl[:-2]):
@@ -2466,7 +2467,7 @@ def wclean(filIN, cmod='eq', cfile=None,
                         wmin = i-j
                         break # only the innermost loop
                 if wmin==-1:
-                    print('WARNING: Left side fully covered! ')
+                    warnings.warn('Left side fully covered! ')
                 
                 for j in range(Nw-i-1):
                     dw = wave[i+1+j] - wave[i]
@@ -2474,7 +2475,7 @@ def wclean(filIN, cmod='eq', cfile=None,
                         wmax = i+1+j
                         break
                 if wmax==0:
-                    print('WARNING: right side fully covered! ')
+                    warnings.warn('Right side fully covered! ')
 
                 Nw_seg = wmax-wmin-1 # number of crossing wvl in segment
                 wave_seg = [] # a segment (every detect) of wave
@@ -2793,8 +2794,8 @@ def concatenate(flist, filOUT=None, comment=None,
     else:
         for f in flist:
             ds = read_fits(f)
-            imin = closest(wmin, ds.wave[0], side='right')
-            imax = closest(wmax, ds.wave[-1], side='left')
+            imin = closest(wmin, ds.wave[0])
+            imax = closest(wmax, ds.wave[-1])
             iwi = 0
             iws = -1
             for i, w in enumerate(ds.wave[:-2]):

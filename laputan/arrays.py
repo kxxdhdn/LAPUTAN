@@ -10,6 +10,7 @@ Arrays
 """
 
 import numpy as np
+import warnings
 
 ## Local
 from utilities import InputError
@@ -62,6 +63,11 @@ def closest(arr, val, side=None):
     ind = arr2list.index(min(arr2list, key=lambda x:abs(x-val)))
 
     if np.isinf(arr2list[ind]):
-        raise InputError('laputan.closest', 'Not found! ')
+        warnings.warn('side condition was ignored. ')
+        
+        arr2list = list(arr)
+        if np.isnan(arr2list[0]):
+            arr2list[0] = np.inf
+        ind =  arr2list.index(min(arr2list, key=lambda x:abs(x-val)))
     
     return ind

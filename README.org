@@ -25,6 +25,10 @@ Anaconda's environment control is recommanded.
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@cea.fr
 * Version log
+** v1.2.4 (20210820)
+- Adopted Python ~warnings.warn~ for warnings in all libraries
+- ~arrays.closest~: Replaced error by warning raised and ignored kw ~side~ when it is not satisfied
+- ~imaging.concatenante~ (Idem. for ~respect.concat~): Removed wrange closest left/right side
 ** v1.2.3 (20210817)
 - ~imaging.imontage~: Corrected bugs in ~coadd~ Monte-Carlo uncertainty propagation
 ** v1.2.2 (20210803)

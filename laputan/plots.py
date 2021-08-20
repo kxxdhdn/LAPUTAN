@@ -19,6 +19,7 @@ from scipy import optimize
 # import matplotlib as mpl
 import matplotlib.colors as mplc
 import matplotlib.pyplot as plt
+import warnings
 
 ## Local
 from utilities import merge_aliases
@@ -180,7 +181,7 @@ class plotool:
         if savename is not None:
             self.fig.savefig(savename, transparent=transparent)
         else:
-            print('WARNING: not saved! ')
+            warnings.warn('Not saved! ')
 
     def show(self):
 

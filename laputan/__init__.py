@@ -18,7 +18,7 @@ print("               \\       /         _")
 print("    * ¨^  .~       =           ~^' _-")
 print("      ~ °\n")
 # print("\n            Author: D. HU")
-print("        Version 1.2.3 (20210817)")
+print("        Version 1.2.4 (20210820)")
 print("\n")
 
 

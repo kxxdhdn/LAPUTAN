@@ -82,7 +82,7 @@ class intercalib:
                                'Filter wavelength (microns)')
             if w_spec[0]>w_grid[0] or w_spec[-1]<w_grid[-1]:
                 warnings.warn('Synthetic photometry of {} can be underestimated' \
-                              'due to uncovered wavelengths'.format(phot))
+                              'due to uncovered wavelengths. '.format(phot))
         ## Insert 2 wvl (0.01 um & w_spec[0]-0.01 um) with 0 value
         wave = np.insert(w_spec, 0, (.01, w_spec[0]-.01))
         Fnu_uni = np.ones(len(wave))
@@ -207,7 +207,7 @@ class intercalib:
         
         ## Clean temperary h5 files
         ##--------------------------
-        if verbose==False:
+        if not verbose:
             SP.call('rm -rf '+fortIN+h5ext, shell=True, cwd=os.getcwd())
             SP.call('rm -rf '+fortOUT+h5ext, shell=True, cwd=os.getcwd())
 
