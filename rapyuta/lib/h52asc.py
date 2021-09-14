@@ -6,7 +6,7 @@ import numpy as np
 # from astropy.table import Table
 from astropy.io import ascii
 
-## astylo
+## rapyuta
 datdir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, datdir+'/../..')
 from playtime.inout import read_hdf5, write_ascii
@@ -27,7 +27,7 @@ for f in filt:
 	## Write (astropy.ascii.write)
 	# data = Table([wave, tran], names=['Wave', 'Spectral Response'])
 	# ascii.write(data, 'filt_'+f+ascext, format='commented_header')
-	## Write (astylo.iolib.write_ascii)
+	## Write (rapyuta.inout.write_ascii)
 	comment = 'Average spectral response curve (electrons/photon - microns) for '+f+' array'
 	write_ascii('filt_'+f, 
 		        header=['Wave', 'Spectral_Response'],

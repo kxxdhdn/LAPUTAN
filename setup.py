@@ -1,18 +1,18 @@
 from setuptools import setup
 
 setup(
-    name = 'laputan',
-    version = '1.2.4',
+    name = 'rapyuta',
+    version = '2.0',
     author = 'D. HU',
-    author_email = 'dangning.hu@cea.fr',
-    description = 'Library of Astronomical Python Utility Tool for Astrophysics Nerds',
+    author_email = 'dangning.hu@outlook.com',
+    description = 'libraRy of Astronomical PYthon Utility Tool for Astrophysics nerds',
     license = 'BSD',
-    keywords = 'astronomy astrophysics',
-    url = 'https://github.com/kxxdhdn/laputan',
+    keywords = 'astronomy astrophysics astrometry imaging spectroscopy',
+    url = 'https://github.com/kxxdhdn/RAPYUTA',
     project_urls={
-        'IDL': 'https://github.com/kxxdhdn/laputan/tree/master/idl',
-        'SwING': 'https://github.com/kxxdhdn/laputan/tree/master/swing',
-        'Tests': 'https://github.com/kxxdhdn/laputan/tree/master/tests',
+        'IDL': 'https://github.com/kxxdhdn/RAPYUTA/tree/main/idl',
+        'SwING': 'https://github.com/kxxdhdn/RAPYUTA/tree/main/swing',
+        'Tests': 'https://github.com/kxxdhdn/RAPYUTA/tree/main/tests',
     },
 
     python_requires='>=3.6',
@@ -30,16 +30,16 @@ setup(
     entry_points={
         # Installation test with command line
         'console_scripts': [
-            'laputest = laputan:iTest',
+            'rapyutest = rapyuta:iTest',
         ],
     },
 
     ## Packages
-    packages = ['laputan'],
+    packages = ['rapyuta'],
 
     ## Package data
     package_data = {
-        # include files in laputan/lib
-        'laputan': ['lib/*.txt','lib/data/*.h5'],
+        # include files in rapyuta/lib
+        'rapyuta': ['lib/*.txt','lib/data/*.h5'],
     },
 )

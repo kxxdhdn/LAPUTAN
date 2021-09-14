@@ -16,8 +16,8 @@ from astropy.io import fits
 import matplotlib.pyplot as plt
 
 ## Local
-sys.path.insert(0, testdir+'/..') ## laputan path
-from laputan.calib import (intercalib, photometry_profile, 
+sys.path.insert(0, testdir+'/..') ## rapyuta path
+from rapyuta.calib import (intercalib, photometry_profile, 
 )
 
 print('\n TEST intercalib ')

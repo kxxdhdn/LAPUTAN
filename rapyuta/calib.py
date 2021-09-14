@@ -412,16 +412,17 @@ def photometry_profile(datdir=None, *photometry):
 
     ## Plotting setting
     ##------------------
-    p = pplot(xlim=(1.9, 40.), ylim=(-.01, 1.01),
-              xlog=1, ylog=1,
-              xlab=r'$Wavelength,\,\,\lambda\,\,[\mu m]$',
-              ylab='Response',
-              # ylab='Spectral response\n(electrons / photon)',
-              legend='upper left', figsize=(12,3), clib='tableau')
+    p = pplot(xlim=(1.9, 40.), ylim=(.01, 1.01),
+              xlog=1, ylog=0,
+              xlabel=r'$Wavelength,\,\,\lambda\,\,[\mu m]$',
+              ylabel='Response',
+              # ylabel='Spectral response\n(electrons / photon)',
+              legend='upper left', anchor=(.1,1.),
+              figsize=(12,3), clib='tableau')
     for i,w in enumerate(lam):
         p.add_plot(w, val[i], lw=1.8, label=photometry[i])
 
-    p.set_border(left=.05, bottom=.2, right=.99, top=.99)
+    p.set_fig(left=.05, bottom=.2, right=.99, top=.99)
 
     # sizeXL = 50
     # p.set_font(xticksize=sizeXL, yticksize=sizeXL, \

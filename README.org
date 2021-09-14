@@ -1,21 +1,23 @@
-#+TITLE: LAPUTAN: Library of Astronomical Python Utility Tool for Astrophysics Nerds
+#+TITLE: RAPYUTA: libraRy of Astronomical PYthon Utility Tool for Astrophysics nerds
 #+AUTHOR: Dangning HU
 
 * Introduction
+Laputa: Castle in the Sky 天空の城ラピュタ (Tenkū no Shiro Rapyuta)
+
 Laputan is an inhabitant of a flying island in Swift's Gulliver's Travels characterized by a neglect of useful occupations and a devotion to visionary projects.
 
-[[./arx/laputa_sketch.jpg][Laputa]]
+[[./arx/laputa_sketch.jpg][Rapyuta]]
 * Helpdesk
 ** Installation
 #+BEGIN_SRC bash
 ## Install 
-pip install laputan
+pip install rapyuta
 
 ## Update
-pip install laputan --upgrade
+pip install rapyuta --upgrade
 
 ## Uninstall
-pip uninstall laputan
+pip uninstall rapyuta
 #+END_SRC
 Anaconda's environment control is recommanded.
 ** In order to access the full functionality, you will need the following extra dependencies:
@@ -23,8 +25,19 @@ Anaconda's environment control is recommanded.
 - [[https://www.astromatic.net/software/swarp][SWarp]]
 - [[https://github.com/kxxdhdn/laputan/tree/main/swing][SwING]]
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
-** Contact: dangning.hu@cea.fr
+** Contact: dangning.hu@outlook.com
 * Version log
+** v2.0 (20210914)
+- Rename package from ~laputan~ to ~rapyuta~ due to the French pun...thus it turns to the Ghibli origin!
+- ~plots.plotool~
+  + Removed ~set_font~ and fixed font size and tick problems
+  + Added ~set_legend~ which supports lengend boxes outside the axes
+  + Renamed ~set_border~ as ~set_fig~ and added suptitle
+  + ~set_ax~
+    * Added font size kw
+    * Renamed ~xlab~ as ~xlabel~ (idem. for ~ylab~, thus coherent to matplotlib)
+    * Changed ~nonposx~ default value from 'sym' to 'clip'
+  + Note that all kw in ~set_fig~ and ~set_ax~ can also be executed individually with ~self.ax.set_kw~
 ** v1.2.4 (20210820)
 - Adopted Python ~warnings.warn~ for warnings in all libraries
 - ~arrays.closest~: Replaced error by warning raised and ignored kw ~side~ when it is not satisfied

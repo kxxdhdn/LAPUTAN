@@ -18,10 +18,10 @@ from astropy.io import fits
 from astropy.wcs import WCS
 
 ## Local
-sys.path.insert(0, testdir+'/..') ## laputan path
-from laputan.inout import fitsext, read_fits, write_fits
-from laputan.astrom import fixwcs
-from laputan.imaging import ( improve, Jy_per_pix_to_MJy_per_sr,
+sys.path.insert(0, testdir+'/..') ## rapyuta path
+from rapyuta.inout import fitsext, read_fits, write_fits
+from rapyuta.astrom import fixwcs
+from rapyuta.imaging import ( improve, Jy_per_pix_to_MJy_per_sr,
                               islice, icrop, irebin, iswarp,
                               imontage, iconvolve, respect, sextract,
                               wclean, interfill, hextract, hswarp )

@@ -16,8 +16,8 @@ from astropy.io import fits
 from astropy.wcs import WCS
 
 ## Local
-sys.path.insert(0, testdir+'/..') ## laputan path
-from laputan.inout import (fclean, read_fits, write_fits,
+sys.path.insert(0, testdir+'/..') ## rapyuta path
+from rapyuta.inout import (fclean, read_fits, write_fits,
                             read_hdf5, write_hdf5,
                             read_ascii, write_ascii,
                             read_csv, write_csv, )

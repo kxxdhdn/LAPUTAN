@@ -1,8 +1,8 @@
-#+TITLE: laputan IDL library
+#+TITLE: rapyuta IDL library
 #+AUTHOR: Dangning HU
 
 * About Me
-This library consists of IDL routines used by ~laputan~, including the resolution convolution ([[https://www.astro.princeton.edu/~draine/Kernels.html][Aniano]], a Python core version is under development), mid-infrared spectral fitting (MILES-idl), /etc./
+This library consists of IDL routines used by ~rapyuta~, including the resolution convolution ([[https://www.astro.princeton.edu/~draine/Kernels.html][Aniano]], a Python core version is under development), mid-infrared spectral fitting (MILES-idl), /etc./
 * User Guide
 ** In order to use ~imaging.iconvolve~, you need to download this file folder (idl) and put it in proper place. 
 ~convolve_image.pro~ - core program ([[https://www.astro.princeton.edu/~draine/Kernels/convolve_image.pro][source]])

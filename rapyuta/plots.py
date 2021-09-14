@@ -5,9 +5,10 @@
 
 Plots
 
+    ellipse
     plotool:
-        figure, set_border, set_clib, set_ax,
-        plot, set_font, save, show
+        figure, set_figure, set_clib, set_ax, set_legend, 
+        plot, save, show
     pplot(plotool):
         add_plot
 
@@ -29,6 +30,38 @@ from utilities import merge_aliases
 sizeXS, sizeS, sizeM = 4, 6, 8
 sizeL, sizeXL, sizeXXL = 10, 12, 14
 
+
+##-----------------------------------------------
+##
+##                 Plot utilities
+##
+##-----------------------------------------------
+
+# def ellipse(xmean=None, ymean=None, xstdev=None, ystdev=None, rho=None,
+#             xlim=(None,None), ylim=(None,None), Npt=300, xlog=False, ylog=False):
+#     '''
+#     Uncertainty ellipse
+
+#     Function used to plot uncertainty ellipses
+#     (or 1-sigma contour of a bivariate normal distribution).
+#     Inspired by F. Galliano's Python library.
+#     '''
+#     x = AR.ramp(x0=xmean-xstdev*(1-1.E-5),x1=xmean+xstdev*(1-1.E-5),N=Npt)
+    
+#     c1 = rho * (x-xmean)/xstdev
+#     c2 = NP.sqrt( (1-rho**2) * (1-(x-xmean)**2/xstdev**2) )
+#     y1 = ystdev * ( c1 - c2 ) + ymean
+#     y2 = ystdev * ( c1 + c2 ) + ymean
+#     xplot = NP.concatenate((x,x[::-1],[x[0]]))
+#     yplot = NP.concatenate((y1,y2[::-1],[y1[0]]))
+#     if (xlog): xplot = NP.exp(xplot)
+#     if (ylog): yplot = NP.exp(yplot)
+#     if (xmin != None): xplot[xplot < xmin] = xmin
+#     if (xmax != None): xplot[xplot > xmax] = xmax
+#     if (ymin != None): yplot[yplot < ymin] = ymin
+#     if (ymax != None): yplot[yplot > ymax] = ymax
+#     return(xplot,yplot)
+
 ##-----------------------------------------------
 ##
 ##            <plotool> based tools
@@ -48,7 +81,7 @@ class plotool:
     def figure(self, figsize=None, figint=True,
                nrows=1, ncols=1):
         
-        if figint==True:
+        if figint:
             plt.ion()
 
         self.nrows = nrows
@@ -61,12 +94,17 @@ class plotool:
             self.fig, self.axes = plt.subplots(nrows, ncols,
                 figsize=figsize)
             self.ax = self.axes[0,0]
-        
-    def set_border(self, left=None, bottom=None, right=None, top=None,
-                   wspace=None, hspace=None):
 
-        plt.subplots_adjust(left=left, bottom=bottom,
-            right=right, top=top, wspace=wspace, hspace=hspace)
+    def set_fig(self, left=None, right=None,
+                bottom=None, top=None,
+                wspace=None, hspace=None,
+                title=None, tfsize=20):
+
+        self.fig.subplots_adjust(left=left, right=right,
+            bottom=bottom, top=top, wspace=wspace, hspace=hspace)
+        
+        if title is not None:
+            self.fig.suptitle(title,size=tfsize)
 
     def set_clib(self, clib):
         if clib=='base':
@@ -80,20 +118,26 @@ class plotool:
         else:
             self.clib = clib
         
-    def set_ax(self, xlog=False, ylog=False,
-               basex=10, basey=10, nonposx='sym', nonposy='sym',
-               xlim=(None,None), ylim=(None,None),
-               xlab=None, ylab=None, legend=None, title=None):
+    def set_ax(self, subax=(1,1), # ax = axes[subax[0]-1,subax[1]-1]
+               xlog=False, ylog=False, # ax.set_xscale
+               basex=10, basey=10, nonposx='clip', nonposy='clip', # ax.set_xscale
+               xlim=(None,None), ylim=(None,None), #ax.set_xlim
+               xtickfsize=10, ytickfsize=10, # ax.xaxis.set_tick_params(labelsize=)
+               xlabel=None, ylabel=None, xfsize=10, yfsize=10, # ax.set_xlabel
+               title=None, tfsize=10, # ax.set_title (subplot title)
+               ):
         '''
         nonposx, nonposy: 'sym', 'mask', 'clip'
         '''
+        if self.nrows!=1 or self.ncols!=1:
+            self.ax = self.axes[subax[0]-1,subax[1]-1]
 
-        if xlog==True:
+        if xlog:
             if nonposx=='sym':
                 self.ax.set_xscale('symlog',base=basex)
             else:
                 self.ax.set_xscale('log',base=basex,nonpositive=nonposx)
-        if ylog==True:
+        if ylog:
             if nonposx=='sym':
                 self.ax.set_yscale('symlog',base=basey)
             else:
@@ -109,17 +153,54 @@ class plotool:
         # self.ax.set_xticklabels()
         # self.ax.set_yticklabels()
 
-        if xlab is not None:
-            self.ax.set_xlabel(xlab)
-        if ylab is not None:
-            self.ax.set_ylabel(ylab)
+        self.ax.xaxis.set_tick_params(labelsize=xtickfsize)
+        self.ax.yaxis.set_tick_params(labelsize=ytickfsize)
+        
+        if xlabel is not None:
+            self.ax.set_xlabel(xlabel,size=xfsize)
+        if ylabel is not None:
+            self.ax.set_ylabel(ylabel,size=yfsize)
         if title is not None:
-            self.ax.set_title(title)
-        if legend is not None:
-            self.ax.legend(loc=legend)
-        self.legend = legend
-    
-    def plot(self, nrow=1, ncol=1,
+            self.ax.set_title(title,size=tfsize)
+        
+    def set_legend(self, subax=None,
+                   loc='center right', fontsize=10,
+                   anchor=None, shrinkx=1., shrinky=1.,
+                   **kwargs):
+        '''
+        - bbox_to_anchor rules: (1,1) correspond to upper right of the axis
+                 bbox_to_anchor = (1,1)
+        .--------.
+        |        |
+        |  axis  |
+        |        |
+        .--------.
+        
+        - lengend loc is relative to the bbox_to_anchor as follows:
+                           |
+        lower right        |       lower left
+        ------------bbox_to_anchor-----------
+        upper right        |       upper left
+                           |
+        '''
+        if subax is None:
+            self.fig.subplots_adjust(right=shrinkx,
+                                     top=shrinky)
+            
+            self.fig.legend(loc=loc, fontsize=fontsize, bbox_to_anchor=anchor,
+                            **kwargs)
+        else:
+            if self.nrows!=1 or self.ncols!=1:
+                self.ax = self.axes[subax[2]-1,subax[1]-1]
+            
+            # shrink current axis
+            box = self.ax.get_position()
+            self.ax.set_position([box.x0, box.y0, box.width*shrinkx, box.height*shrinky])
+
+            self.ax.legend(loc=loc, fontsize=fontsize, bbox_to_anchor=anchor,
+                           **kwargs)            
+        
+    def plot(self, subax=(1,1),
              x=None, y=None, xerr=None, yerr=None,
              fmt='', capsize=None, barsabove=False, # errorbar kw
              ecolor=None, ec=None, elinewidth=None, elw=None, # errorbar kw
@@ -129,6 +210,8 @@ class plotool:
         The idea is to all set in one command,
         while each single operation should also be valid.
         '''
+        if self.nrows!=1 or self.ncols!=1:
+            self.ax = self.axes[subax[0]-1,subax[1]-1]
 
         ## kw aliases
         ec = merge_aliases(None, ecolor=ecolor, ec=ec)
@@ -145,8 +228,6 @@ class plotool:
 
         ## CA: Cartesian using matplotlib.pyplot.errorbar
         if mod=='CA':
-            if self.nrows!=1 or self.ncols!=1:
-                self.ax = self.axes[nrow-1,ncol-1]
                 
             self.markers, self.caps, self.bars = self.ax.errorbar(
                 x=x, y=y, yerr=yerr, xerr=xerr,
@@ -162,19 +243,6 @@ class plotool:
             print('CL: cylindrical')
             print('SP: spherical')
             print('*******************')
-
-    def set_font(self, fontsize=sizeM, subtitlesize=sizeM,
-                 axesize=sizeS, xticksize=sizeS, yticksize=sizeS,
-                 legendsize=sizeM, figtitlesize=sizeL):
-
-        plt.rc('font', size=fontsize)            # general text
-        plt.rc('axes', titlesize=subtitlesize)   # axes title
-        plt.rc('axes', labelsize=axesize)        # x and y labels
-        plt.rc('xtick', labelsize=xticksize)     # x tick
-        plt.rc('ytick', labelsize=yticksize)     # y tick
-        plt.rc('legend', fontsize=legendsize)    # legend
-        plt.rc('figure', titlesize=figtitlesize) # figure title
-
 
     def save(self, savename=None, transparent=False):
 
@@ -192,15 +260,19 @@ class pplot(plotool):
     '''
     Uni-frame plot (1 row * 1 col)
     '''
-    def __init__(self, x=None, y=None, xerr=None, yerr=None,
+    def __init__(self, x=None, y=None, xerr=None, yerr=None, # errorbar kw
                  fmt='', capsize=None, barsabove=False, # errorbar kw
                  ecolor=None, ec=None, elinewidth=None, elw=None, # errorbar kw
                  figsize=None, figint=False, # figure kw
-                 left=.1, bottom=.1, right=.99, top=.9, # set_border kw
-                 wspace=None, hspace=None, # set_border kw
-                 xlim=(None, None), ylim=(None,None), xlog=None, ylog=None, # set_ax kw
-                 basex=10, basey=10, nonposx='sym', nonposy='sym', # set_ax kw
-                 xlab='X', ylab='Y', legend=None, title='Untitled', # set_ax kw
+                 left=.1, bottom=.1, right=.99, top=.9, # set_fig kw
+                 wspace=.1, hspace=.1, # set_fig kw
+                 title='Untitled', titlesize=None, # set_fig kw
+                 xlog=None, ylog=None, # set_ax kw
+                 basex=10, basey=10, nonposx='clip', nonposy='clip', # set_ax kw
+                 xlim=(None, None), ylim=(None,None), # set_ax kw
+                 ticksize=None, # set_ax kw
+                 xlabel='X', ylabel='Y', labelsize=None, # set_ax kw
+                 legend=None, legendsize=None, anchor=None, # set_legend kw
                  clib='base', c=None, **kwargs):
         super().__init__(x, y)
 
@@ -218,9 +290,9 @@ class pplot(plotool):
         ## Init figure
         self.figure(figsize, figint)
 
-        ## set_border
-        self.set_border(left=left, bottom=bottom,
-            right=right, top=top, wspace=wspace, hspace=hspace)
+        ## set_fig
+        self.set_fig(left=left, bottom=bottom, right=right, top=top,
+            wspace=wspace, hspace=hspace, title=title, tfsize=titlesize)
 
         ## plot
         self.plot(x=x, y=y, xerr=xerr, yerr=yerr,
@@ -229,10 +301,14 @@ class pplot(plotool):
                   c=c, **kwargs)
 
         ## set_ax
-        self.set_ax(xlog, ylog, basex, basey, nonposx, nonposy,
-                    xlim, ylim, xlab, ylab, legend, title)
-        
-        self.set_font()
+        self.set_ax((1,1), xlog, ylog, basex, basey, nonposx, nonposy, xlim, ylim,
+                    ticksize, ticksize, xlabel, ylabel, labelsize, labelsize)
+
+        if legend is not None:
+            self.set_legend(loc=legend, fontsize=legendsize, anchor=anchor)
+        self.legend = legend
+        self.legendsize = legendsize
+        self.anchor = anchor
 
     def add_plot(self, x=None, y=None, xerr=None, yerr=None,
                  fmt='', capsize=None, barsabove=False, # errorbar opt
@@ -267,4 +343,6 @@ class pplot(plotool):
                   c=c, **kwargs)
 
         ## Add legend
-        self.ax.legend(loc=self.legend)
+        if self.legend is not None:
+            self.set_legend(loc=self.legend,
+                fontsize=self.legendsize, anchor=self.anchor)

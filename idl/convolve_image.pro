@@ -420,9 +420,9 @@ pro convolve_image
 ;kernels_path = './../Kernels/'
 ;convolutions_path = './../Convolved/'
 
-images_path  = '/Users/dhu/Github/laputan/tests/out/conv/'
-kernels_path = '/Users/dhu/Github/laputan/tests/lib/' 
-convolutions_path = '/Users/dhu/Github/laputan/tests/out/conv/'
+images_path  = '/Users/dhu/Github/RAPYUTA/tests/out/conv/'
+kernels_path = '/Users/dhu/Github/RAPYUTA/tests/lib/' 
+convolutions_path = '/Users/dhu/Github/RAPYUTA/tests/out/conv/'
 do_we_write           = 1
 do_we_save_the_kernel = 1
 

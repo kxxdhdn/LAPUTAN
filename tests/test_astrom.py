@@ -16,9 +16,9 @@ from astropy.io import fits
 from astropy.wcs import WCS
 
 ## Local
-sys.path.insert(0, testdir+'/..') ## laputan path
-from laputan.inout import fitsext
-from laputan.astrom import (pix2sr, sr2arcsec2, rad2arcsec, hour2deg,
+sys.path.insert(0, testdir+'/..') ## rapyuta path
+from rapyuta.inout import fitsext
+from rapyuta.astrom import (pix2sr, sr2arcsec2, rad2arcsec, hour2deg,
                              deg2hour, get_cd, get_pc, fixwcs, )
 
 pc = np.array(((-0.928395134922, -0.371594501376), (0.371594501376, -0.928395134922)))

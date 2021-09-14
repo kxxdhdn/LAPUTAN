@@ -1,6 +1,6 @@
 ; Read the file in and assign it to the 'param' variable;
 ; assign the header information to variables for use later.
-klist='/Users/dhu/Github/laputan/tests/out/kernelist.csv' ; /path/of/csv/file/storing/kernel/list
+klist='/Users/dhu/Github/RAPYUTA/tests/out/kernelist.csv' ; /path/of/csv/file/storing/kernel/list
 param = READ_CSV(klist, N_TABLE_HEADER=1)
 ; HELP, param, /STRUCTURES
 im_file = param.FIELD1

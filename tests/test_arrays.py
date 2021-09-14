@@ -14,8 +14,8 @@ if not os.path.exists(outdir):
 import numpy as np
 
 ## Local
-sys.path.insert(0, testdir+'/..') ## laputan path
-from laputan.arrays import (allist, closest, )
+sys.path.insert(0, testdir+'/..') ## rapyuta path
+from rapyuta.arrays import (allist, closest, )
 
 a = np.arange(24, dtype=float).reshape(4,3,2)
 b = [['a', 'b'], ['c', 'd']]
