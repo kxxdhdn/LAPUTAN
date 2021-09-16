@@ -2,12 +2,12 @@ from setuptools import setup
 
 setup(
     name = 'rapyuta',
-    version = '2.0',
+    version = '2.0.1',
     author = 'D. HU',
     author_email = 'dangning.hu@outlook.com',
     description = 'libraRy of Astronomical PYthon Utility Tool for Astrophysics nerds',
     license = 'BSD',
-    keywords = 'astronomy astrophysics astrometry imaging spectroscopy',
+    keywords = 'astronomy astrophysics astrometry imaging spectroscopy spitzer akari jwst',
     url = 'https://github.com/kxxdhdn/RAPYUTA',
     project_urls={
         'IDL': 'https://github.com/kxxdhdn/RAPYUTA/tree/main/idl',

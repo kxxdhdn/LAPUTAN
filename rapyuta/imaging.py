@@ -53,7 +53,7 @@ from inout import (fitsext, csvext, ascext, fclean,
                    read_fits, write_fits, savext
                    # read_csv, write_csv, read_ascii,
 )
-from arrays import allist, closest
+from arrays import listize, closest
 from maths import nanavg, bsplinterpol
 from astrom import fixwcs, get_pc, pix2sr
 
@@ -453,7 +453,7 @@ class improve:
         oldNy = self.Ny
         
         if pixscale is not None:
-            pixscale = allist(pixscale)
+            pixscale = listize(pixscale)
             if len(pixscale)==1:
                 pixscale.extend(pixscale)
             ## convert arcsec to degree
@@ -462,7 +462,7 @@ class improve:
             xratio = cdelt[0] / abs(oldcdelt[0])
             yratio = cdelt[1] / abs(oldcdelt[1])
         else:
-            pixscale = allist(abs(oldcdelt) * 3600.)
+            pixscale = listize(abs(oldcdelt) * 3600.)
             xratio = 1.
             yratio = 1.
 
@@ -908,7 +908,7 @@ class imontage(improve):
         ------ OUTPUT ------
         self.images         reprojected images
         '''
-        flist = allist(flist)
+        flist = listize(flist)
         
         # if refheader is None:
         #     raise InputError('<imontage>','No reprojection header!')
@@ -978,7 +978,7 @@ class imontage(improve):
         '''
         Reproject and coadd
         '''
-        flist = allist(flist)
+        flist = listize(flist)
         dataset = type('', (), {})()
         comment = "Created by <imontage>"
 
@@ -1089,7 +1089,7 @@ class imontage_v0_4(improve):
         self.path_tmp = path_tmp
 
         ## Inputs
-        self.flist = allist(flist)
+        self.flist = listize(flist)
         self.filREF = filREF
         self.hdREF = hdREF
         self.fmod = fmod
@@ -1302,7 +1302,7 @@ class imontage_v0_4(improve):
 
         If Nmc==0, no MC
         '''
-        flist = allist(flist)
+        flist = listize(flist)
         dataset = type('', (), {})()
         wvl = read_fits(flist[0]).wave
         dataset.wvl = wvl
@@ -1399,7 +1399,7 @@ class imontage_v0_4(improve):
         '''
         Same function with combine() using reproject.reproject_and_coadd()
         '''
-        flist = allist(flist)
+        flist = listize(flist)
         dataset = type('', (), {})()
         comment = "Created by <imontage>"
 
@@ -1539,7 +1539,7 @@ class iswarp(improve):
                 self.refheader = refheader
         else:
             ## Input files in list object
-            flist = allist(flist)
+            flist = listize(flist)
                 
             ## Images
             image_files = ' '
@@ -1664,7 +1664,7 @@ class iswarp(improve):
             os.makedirs(path_comb)
 
         ## Input files in list format
-        flist = allist(flist)
+        flist = listize(flist)
         
         ## Header
         ##--------
@@ -1861,7 +1861,7 @@ class iconvolve(improve):
             self.rand_splitnorm(filUNC)
 
         ## Input kernel file in list format
-        self.kfile = allist(kfile)
+        self.kfile = listize(kfile)
 
         ## doc (csv) file of kernel list
         self.klist = klist
@@ -1910,7 +1910,7 @@ class iconvolve(improve):
     #     ------ OUTPUT ------
     #     '''
     #     ## Input files in list format
-    #     flist = allist(flist)
+    #     flist = listize(flist)
         
     #     ## CHOose KERnel(s)
     #     lst = []
@@ -1937,7 +1937,7 @@ class iconvolve(improve):
         ------ OUTPUT ------
         '''
         ## Input files in list format
-        flist = allist(flist)
+        flist = listize(flist)
         
         ## CHOose KERnel(s)
         image = []
@@ -2172,10 +2172,10 @@ class respect(improve):
 
         if wmin is None:
             wmin = wvl[0]
-        iwi = allist(wvl).index(wvl[closest(wvl,wmin)])
+        iwi = listize(wvl).index(wvl[closest(wvl,wmin)])
         if wmax is None:
             wmax = wvl[-1]
-        iws = allist(wvl).index(wvl[closest(wvl,wmax)])
+        iws = listize(wvl).index(wvl[closest(wvl,wmax)])
 
         if lim_unc<0:
             raise ValueError('lim_unc must be positive!')

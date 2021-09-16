@@ -5,7 +5,7 @@
 
 Arrays
 
-    allist, closest
+    arrayize, listize, closest, ramp
 
 """
 
@@ -16,19 +16,57 @@ import warnings
 from utilities import InputError
 
 
-def allist(allIN):
+def arrayize(arr,N=None,default=None,NP=True,dtype=None):
+    '''
+    Transform scalar or list into a numpy array
+
+    Returns a numpy array or a list (if NP=False) whether the input is a scalar, 
+    a list or an array. If N is set to an integer and arr is a scalar, then the 
+    output is a size N array with the value arr at each element. If arr is None, 
+    then default is substituted.
+
+    Copyright: F. Galliano
+    '''
+    islist = isinstance(arr,list)
+    isdict = isinstance(arr,dict)
+    isnumpy = ( (not np.isscalar(arr)) and not islist and not isdict and \
+                not isinstance(arr,type(None)) )
+    arrout = arr
+    if (not islist and not isnumpy):
+        if (arrout == None): arrout = default
+        if (N != None):
+            if (np.size(arrout) == 1):
+                arrout = [arrout for i in np.arange(N)]
+            elif (np.size(arrout) != N):
+                raise InputError('<arrayize>',
+                                 'wrong size for default.')
+        else:
+            arrout = [arrout]
+        if (NP): arrout = np.array(arrout,dtype=dtype)
+    elif (islist and NP):
+        arrout = np.array(arrout,dtype=dtype)
+    Nout = len(arrout)
+    if (N != None):
+        if (N != Nout):
+            raise InputError('<arrayize>',
+                             'array is not of size N.')
+        return(arrout)
+    else:
+        return(arrout,Nout)
+    
+def listize(arr):
     '''
     Convert any iterable to list object
     worked for int, float, string, tuple, ndarray, list, dict, set, etc.
     '''
-    if np.isscalar(allIN):
-        listOUT = [allIN] # scalar (string, int, float, etc.)
-    elif isinstance(allIN, np.ndarray):
-        listOUT = allIN.tolist() # ndarray
+    if np.isscalar(arr):
+        listout = [arr] # scalar (string, int, float, etc.)
+    elif isinstance(arr, np.ndarray):
+        listout = arr.tolist() # ndarray
     else:
-        listOUT = list(allIN) # others
+        listout = list(arr) # others
 
-    return listOUT
+    return listout
     
 def closest(arr, val, side=None):
     '''
@@ -71,3 +109,72 @@ def closest(arr, val, side=None):
         ind =  arr2list.index(min(arr2list, key=lambda x:abs(x-val)))
     
     return ind
+
+def ramp(x0=0,x1=1,dx=None,dlnx=None,dlogx=None,N=None,log=None, \
+         homogenize=True):
+    '''
+    GENERATE A REAL RAMP OF VALUES (unlike arange)
+
+    This function generates a ramp between x0 and x1, in linear or log scale.
+    There are two modes.
+      1. The number of elements in the ramp can be enforced (through N). If log
+    is True the steps are regular in logarithmic scale, otherwise (default), they
+    are linear.
+      2. The step between elements can be enforced. If dlnx is set, then it is
+    used as the step in ln(x), if it is dlogx, then the step is in log10(x), 
+    otherwise, dx is the step in x. If the chosen step is not chosen exaclty to
+    go from x0 to x1, there are two choices.
+            a) if homogenize is True (default), the actual size is the step is
+         slightly modified to have evenly spaced values between x0 and x1.
+           b) if homogenize is False, the N-1 first steps are excatly the entered
+         value and the last one is smaller.
+    
+    Copyright: F. Galliano
+    '''
+    if ((dx == None and dlnx == None and dlogx == None and N == None) \
+        or (dx != None and dlnx == None and dlogx == None and N != None)):
+        UT.strike('ramp','you should select either step or N')
+
+    # Step mode
+    elif (N == None):
+        if (log == None):
+            if (dx == None and dlnx == None):
+                log = True
+                log10 = True
+            elif (dx == None and dlogx == None):
+                log = True
+                log10 = False
+            elif (dlnx == None and dlogx == None):
+                log = False
+                log10 = False
+        if (log):
+            if (log10):
+                N = np.round( (np.log10(x1)-np.log10(x0)) / dlogx ) + 1
+                if (not homogenize):
+                    x = 10**(np.arange(N,dtype=float)*dlogx)*x0
+                    if (np.max(x) < x1): x = np.append(x,x1)
+                    return(x)
+            else:
+                N = np.round( (np.log(x1)-np.log(x0)) / dlnx ) + 1
+                if (not homogenize):
+                    x = np.exp(np.arange(N,dtype=float)*dlnx)*x0
+                    if (np.max(x) < x1): x = np.append(x,x1)
+                    return(x)
+        else:
+            N = np.round( (x1-x0) / dx ) + 1
+            if (not homogenize):
+                x = np.arange(N,dtype=float)*dx + x0
+                if (np.max(x) < x1): x = np.append(x,x1)
+                return(x)
+            
+    # Number mode
+    elif (dx == None and dlnx == None and dlogx == None):
+        if (log == None): log = False
+
+    # Generate the ramp
+    dindgen = np.append( np.arange(N-1,dtype=float) / (N-1), 1)
+    if (log):
+        x = np.exp(dindgen*(np.log(x1)-np.log(x0)) + np.log(x0))
+    else:
+        x = dindgen*(x1-x0) + x0
+    return(x)

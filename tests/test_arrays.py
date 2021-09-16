@@ -15,7 +15,7 @@ import numpy as np
 
 ## Local
 sys.path.insert(0, testdir+'/..') ## rapyuta path
-from rapyuta.arrays import (allist, closest, )
+from rapyuta.arrays import (listize, closest, )
 
 a = np.arange(24, dtype=float).reshape(4,3,2)
 b = [['a', 'b'], ['c', 'd']]
@@ -28,12 +28,12 @@ x[90:] = np.nan
 ## Unsorted x with repeating elements
 x[60:70] = -2.345
 
-print('\n TEST allist ')
+print('\n TEST listize ')
 print('-------------')
-print('ndarray to list: ', allist(a), '\n')
-print('string to list: ', allist(c), '\n')
-print('int/float to list: ', allist(d), '\n')
-print('list: ', allist(b))
+print('ndarray to list: ', listize(a), '\n')
+print('string to list: ', listize(c), '\n')
+print('int/float to list: ', listize(d), '\n')
+print('list: ', listize(b))
 
 print('\n TEST closest ')
 print('--------------')

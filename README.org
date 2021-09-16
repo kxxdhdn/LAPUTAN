@@ -2,7 +2,7 @@
 #+AUTHOR: Dangning HU
 
 * Introduction
-Laputa: Castle in the Sky 天空の城ラピュタ (Tenkū no Shiro Rapyuta)
+Laputa: Castle in the Sky / 天空の城ラピュタ (Tenkū no Shiro Rapyuta)
 
 Laputan is an inhabitant of a flying island in Swift's Gulliver's Travels characterized by a neglect of useful occupations and a devotion to visionary projects.
 
@@ -27,6 +27,19 @@ Anaconda's environment control is recommanded.
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@outlook.com
 * Version log
+** v2.0.1 (20210916)
+- Imported error ellipse support from F. Galliano's Python library
+  + ~arrays~: ~arrayize~, ~ramp~
+  + ~plots~: ~Btau~, ~Ctau~, ~ellipse~ and ~SUE~
+  + ~plots.plotool~: ~eplot~
+- ~plots.plotool~
+  + Fixed the bug when any of ~nrows~ or ~ncols~ equals to 1, self.axes is 1D so self.ax cannot be attributed
+  + Added ~xisln~ and ~yisln~ kw for ~plot~
+  + Added ~close~
+- ~plots.pplot~
+  + Fixed the bug when legend anchor kw appears tight layout is auto deactivated
+- Added ~tests/test_plots.py~
+- Renamed ~arrays.allist~ to ~arrays.listize~
 ** v2.0 (20210914)
 - Rename package from ~laputan~ to ~rapyuta~ due to the French pun...thus it turns to the Ghibli origin!
 - ~plots.plotool~

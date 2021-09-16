@@ -20,7 +20,7 @@ import warnings
 DEVNULL = open(os.devnull, 'w')
 
 ## Local
-from arrays import allist
+from arrays import listize
 from inout import (ascext, fitsext, h5ext,
                    read_fits, write_fits,
                    read_hdf5, write_hdf5#, read_ascii
@@ -73,7 +73,7 @@ class intercalib:
           specoff_ov_bboff    spectral/broad band offset ratio
         '''
         ## Convert all format phot names to list
-        filt = allist(filt)
+        filt = listize(filt)
 
         if self.filIN is not None:
             w_spec = self.wvl
@@ -135,7 +135,7 @@ class intercalib:
         ds = type('', (), {})()
 
         ## Convert all format phot names to list
-        filt = allist(filt)
+        filt = listize(filt)
 
         ## Input is a FITS file
         if self.filIN is not None:
@@ -417,8 +417,8 @@ def photometry_profile(datdir=None, *photometry):
               xlabel=r'$Wavelength,\,\,\lambda\,\,[\mu m]$',
               ylabel='Response',
               # ylabel='Spectral response\n(electrons / photon)',
-              legend='upper left', anchor=(.1,1.),
-              figsize=(12,3), clib='tableau')
+              legend='upper left', legendalpha=.1,
+              figsize=(12,3), title=None, clib='tableau')
     for i,w in enumerate(lam):
         p.add_plot(w, val[i], lw=1.8, label=photometry[i])
 
@@ -439,8 +439,10 @@ def photometry_profile(datdir=None, *photometry):
     greylines.extend([14.266611, 21.051888]) # Spitzer/IRS-LL2
     pinklines.extend([19.483675, 21.50092]) # Spitzer/IRS-LL3
     greylines.extend([20.555237, 38.41488]) # Spitzer/IRS-LL1
-    p.ax.vlines(greylines, 0, 1.1, linestyles='dotted', colors='grey')
-    p.ax.vlines(pinklines, 0, 1.1, linestyles='dotted', colors='pink')
+    for gl in greylines:
+        p.ax.axvline(gl, linestyle='dotted', color='grey')
+    for pl in pinklines:
+        p.ax.axvline(pl, linestyle='dotted', color='pink')
 
     ## tick setting
     ##-------------------- x --------------------------

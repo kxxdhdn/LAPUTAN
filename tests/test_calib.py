@@ -85,6 +85,7 @@ ax2.plot(wave, new_spec2, c='y',
 ax2.legend(loc='upper left')
 
 fig.savefig(outdir+'calib_correct_spec.png')
+plt.close()
 print('See ./out/calib_correct_spec.png [Done]')
 
 print('\n TEST photometry_profile ')
