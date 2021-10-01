@@ -721,7 +721,7 @@ class pplot(plotool):
     '''
     Uni-frame plot (1 row * 1 col)
     '''
-    def __init__(self, x=None, y=None, xerr=None, yerr=None,
+    def __init__(self, x=None, y=None, yerr=None, xerr=None,
                  ## errorbar kw
                  fmt='', capsize=None, barsabove=False,
                  ecolor=None, ec=None, elinewidth=None, elw=None,

@@ -5,10 +5,12 @@
 
 Arrays
 
-    arrayize, listize, closest, ramp
+    arrayize, listize, closest, ramp,
+    pix2sup, sup2pix, 
 
 """
 
+import math
 import numpy as np
 import warnings
 
@@ -178,3 +180,71 @@ def ramp(x0=0,x1=1,dx=None,dlnx=None,dlogx=None,N=None,log=None, \
     else:
         x = dindgen*(x1-x0) + x0
     return(x)
+
+
+def pix2sup(x, xscale=1, x0=None, origin=0):
+    '''
+    Convert pixel to super pixel coordinates given super pixel zero point
+
+    ------ INPUT ------
+    x                   pixel coordinates
+    xscale              super pixel size (Default: 1)
+    x0                  zero point of super pixel
+    origin              zero point convention
+                          1 if in FITS and Fortran standards
+                          0 if in Numpy and C standards
+    ------ OUTPUT ------
+    xs                  super pixel coordinates
+    '''
+    if origin==1:
+        if x0 is None:
+            x0 = 1
+            
+        if x-x0>=0:
+            xs = math.floor((x-x0)/xscale) + 1
+        else:
+            xs = math.floor((x-x0)/xscale)
+            
+    elif origin==0:
+        if x0 is None:
+            x0 = 0
+            
+        xs = math.floor((x-x0)/xscale)
+    
+    return xs
+
+def sup2pix(xs, xscale=1, x0=None, Npix=None, origin=0):
+    '''
+    Convert super pixel to pixel coordinates given super pixel zero point
+
+    ------ INPUT ------
+    xs                  super pixel coordinates
+    xscale              super pixel size (Default: 1)
+    x0                  zero point of super pixel
+    origin              zero point convention
+                          1 if in FITS and Fortran standards
+                          0 if in Numpy and C standards
+    ------ OUTPUT ------
+    xarr                pixel coordinates
+    '''
+    if origin==1:
+        if x0 is None:
+            x0 = 1
+            
+        x = x0 + (xs-1) * xscale
+
+    elif origin==0:
+        if x0 is None:
+            x0 = 0
+            
+        x = x0 + xs * xscale
+
+    if Npix is None:
+        xarr = [x+i for i in range(xscale)]
+    else:
+        xarr = []
+        for i in range(xscale):
+            if x+i<=Npix:
+                xarr.append(x+i)
+    
+    return xarr

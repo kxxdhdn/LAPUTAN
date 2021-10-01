@@ -6,8 +6,10 @@
 Imaging
 
     improve:
-        reinit, uncert, rand_norm, rand_splitnorm, 
-        slice, slice_inv_sq, crop, rebin
+        reinit, uncert, 
+        rand_norm, rand_splitnorm, rand_pointing, 
+        slice, slice_inv_sq, crop, rebin, groupixel
+        smooth, artifact, mask
     Jy_per_pix_to_MJy_per_sr(improve):
         header, image, wave
     iuncert(improve):
@@ -18,19 +20,22 @@ Imaging
         header, image, wave
     irebin(improve):
         header, image, wave
+    igroupixel(improve):
+        header, image, wave
+    ismooth(improve):
+        header, image, wave
     imontage(improve):
         reproject, reproject_mc, coadd, clean
     iswarp(improve):
-        footprint, combine, clean
+        footprint, combine, reproject_mc, clean
     iconvolve(improve):
         spitzer_irs, choker, do_conv, image, wave,
         filenames, clean
-    respect(improve):
-        concat, smooth, mask
-    sextract(improve):
-        rand_pointing, spec_build, sav_build,
+    cupid(improve):
+        spec_build, sav_build,
         header, image, wave
-    wmask, wclean, interfill, hextract, hswarp, concatenante, 
+    wmask, wclean, interfill, hextract, hswarp, 
+    concatenante
 
 """
 
@@ -39,6 +44,7 @@ import os
 import math
 import numpy as np
 from scipy.io import readsav
+from scipy.interpolate import interp1d
 from astropy import wcs
 from astropy.io import ascii
 from astropy.table import Table
@@ -50,10 +56,10 @@ import warnings
 ## Local
 from utilities import InputError
 from inout import (fitsext, csvext, ascext, fclean,
-                   read_fits, write_fits, savext
+                   read_fits, write_fits, savext, write_hdf5,
                    # read_csv, write_csv, read_ascii,
 )
-from arrays import listize, closest
+from arrays import listize, closest, pix2sup, sup2pix
 from maths import nanavg, bsplinterpol
 from astrom import fixwcs, get_pc, pix2sr
 
@@ -88,24 +94,27 @@ class improve:
             self.hdr = header
             self.im = image
             self.wvl = wave
-        self.Ndim = self.im.ndim
-        if self.Ndim==3:
-            self.Nw, self.Ny, self.Nx = self.im.shape
+        if self.im is not None:
+            self.Ndim = self.im.ndim
+            if self.Ndim==3:
+                self.Nw, self.Ny, self.Nx = self.im.shape
+    
+                ## Nw=1 patch
+                if self.im.shape[0]==1:
+                    self.Ndim = 2
+            elif self.Ndim==2:
+                self.Ny, self.Nx = self.im.shape
+                self.Nw = None
 
-            ## Nw=1 patch
-            if self.im.shape[0]==1:
-                self.Ndim = 2
-        elif self.Ndim==2:
-            self.Ny, self.Nx = self.im.shape
-            self.Nw = None
-
-        ws = fixwcs(header=self.hdr, mode='red_dim')
-        self.hdred = ws.header # reduced header
-        self.w = ws.wcs
-        pcdelt = get_pc(wcs=ws.wcs)
-        self.cdelt = pcdelt.cdelt
-        self.pc = pcdelt.pc
-        self.cd = pcdelt.cd
+        if self.hdr is not None:
+            hdr = self.hdr.copy()
+            ws = fixwcs(header=hdr, mode='red_dim')
+            self.hdred = ws.header # reduced header
+            self.w = ws.wcs
+            pcdelt = get_pc(wcs=ws.wcs)
+            self.cdelt = pcdelt.cdelt
+            self.pc = pcdelt.pc
+            self.cd = pcdelt.cd
         
         if verbose==True:
             print('<improve> file: ', filIN)
@@ -116,7 +125,6 @@ class improve:
         '''
         Update init variables
         '''
-        
         ## INPUTS
         self.filIN = filIN
         self.wmod = wmod
@@ -133,17 +141,23 @@ class improve:
             self.im = image
             self.wvl = wave
         self.Ndim = self.im.ndim
+        self.hdr['NAXIS'] = self.Ndim
         if self.Ndim==3:
             self.Nw, self.Ny, self.Nx = self.im.shape
-
             ## Nw=1 patch
             if self.im.shape[0]==1:
                 self.Ndim = 2
+                del hdr['NAXIS3']
+            else:
+                self.hdr['NAXIS3'] = self.Nw
         elif self.Ndim==2:
             self.Ny, self.Nx = self.im.shape
             self.Nw = None
+        self.hdr['NAXIS2'] = self.Ny
+        self.hdr['NAXIS1'] = self.Nx
 
-        ws = fixwcs(header=self.hdr, mode='red_dim')
+        hdr = self.hdr.copy()
+        ws = fixwcs(header=hdr, mode='red_dim')
         self.hdred = ws.header # reduced header
         self.w = ws.wcs
         pcdelt = get_pc(wcs=ws.wcs)
@@ -172,7 +186,6 @@ class improve:
         ------ OUTPUT ------
         unc                 estimated unc map
         '''
-        ## 
         if filUNC is not None:
             unc = read_fits(filUNC).data
         else:
@@ -222,12 +235,12 @@ class improve:
             
         return unc
 
-    def rand_norm(self, filIN=None, unc=None, sigma=1., mu=0.):
+    def rand_norm(self, filUNC=None, unc=None, sigma=1., mu=0.):
         '''
         Add random N(0,1) noise
         '''
-        if filIN is not None:
-            unc = read_fits(filIN).data
+        if filUNC is not None:
+            unc = read_fits(filUNC).data
 
         if unc is not None:
             ## unc should have the same dimension with im
@@ -236,18 +249,18 @@ class improve:
 
         return self.im
 
-    def rand_splitnorm(self, filIN=None, unc=None, sigma=1., mu=0.):
+    def rand_splitnorm(self, filUNC=None, unc=None, sigma=1., mu=0.):
         '''
         Add random SN(0,lam,lam*tau) noise
 
         ------ INPUT ------
-        filIN               2 FITS files for unc of left & right sides
+        filUNC              2 FITS files for unc of left & right sides
         unc                 2 uncertainty ndarrays
         ------ OUTPUT ------
         '''
-        if filIN is not None:
+        if filUNC is not None:
             unc = []
-            for f in filIN:
+            for f in filUNC:
                 unc.append(read_fits(f).data)
             
         if unc is not None:
@@ -273,6 +286,153 @@ class improve:
                             else:
                                 self.im[k,y,x] += abs(
                                     theta[k,y,x]) * unc[1][k,y,x]
+
+        return self.im
+
+    def rand_pointing(self, sigma=0, header=None, fill='med',
+                      xscale=1, yscale=1, swarp=False, tmpdir=None):
+        '''
+        Add pointing uncertainty to WCS
+
+        ------ INPUT ------
+        sigma               pointing accuracy (arcsec)
+        header              baseline
+        fill                fill value of no data regions after shift
+                              'med': axis median (default)
+                              'avg': axis average
+                              float: constant
+        xscale,yscale       regrouped super pixel size
+        swarp               use SWarp to perform position shifts
+                              Default: False (not support supix)
+        ------ OUTPUT ------
+        '''
+        ## Set path of tmp files
+        if tmpdir is None:
+            path_tmp = os.getcwd()+'/tmp_swp/'
+        else:
+            path_tmp = tmpdir
+        if not os.path.exists(path_tmp):
+            os.makedirs(path_tmp)
+        
+        if sigma!=0:
+            sigma /= 3600.
+            d_ro = abs(np.random.normal(0., sigma)) # N(0,sigma)
+            d_phi = np.random.random() *2. * np.pi # U(0,2*pi)
+            # d_ro, d_phi = 0.0002, 4.5
+            # print('d_ro,d_phi = ', d_ro,d_phi)
+            ## New header/WCS
+            if header is None:
+                header = self.hdr
+            wcs = fixwcs(header=header, mode='red_dim').wcs
+            Nx = header['NAXIS1']
+            Ny = header['NAXIS2']
+            newheader = header.copy()
+            newheader['CRVAL1'] += d_ro * np.cos(d_phi)
+            newheader['CRVAL2'] += d_ro * np.sin(d_phi)
+            newcs = fixwcs(header=newheader, mode='red_dim').wcs
+    
+            ## Convert world increment to pix increment
+            pix = wcs.all_world2pix(newheader['CRVAL1'], newheader['CRVAL2'], 1)
+            d_x = pix[0] - header['CRPIX1']
+            d_y = pix[1] - header['CRPIX2']
+            # print('Near CRPIXn increments: ', d_x, d_y)
+            # val1 = np.array(newcs.all_pix2world(0.5, 0.5, 1))
+            # d_x, d_y = wcs.all_world2pix(val1[np.newaxis,:], 1)[0] - 0.5
+            # print('Near (1,1) increments: ', d_x, d_y)
+
+            ## Resampling
+            if swarp:
+                write_fits(path_tmp+'tmp_rand_shift',
+                           newheader, self.im, self.wvl)
+                swp = iswarp(refheader=self.hdr, tmpdir=path_tmp)
+                rep = swp.combine(path_tmp+'tmp_rand_shift',
+                                  combtype='avg', keepedge=True)
+                self.im = rep.image
+                self.im[np.isnan(rep.image)] = 0
+            else:
+                Nxs = math.ceil(Nx/xscale)
+                cube_supx = np.zeros((self.Nw,Ny,Nxs))
+                frac2 = d_x / xscale
+                f2 = math.floor(frac2)
+                frac1 = 1 - frac2
+                for xs in range(Nxs):
+                    if fill=='med':
+                        fill_value = np.nanmedian(self.im,axis=2)
+                    elif fill=='avg':
+                        fill_value = np.nanmean(self.im,axis=2)
+                    else:
+                        fill_value = fill
+                    if frac2>=0:
+                        if xs>=f2:
+                            x0 = sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
+                            cube_supx[:,:,xs] += (f2+frac1) * np.nanmean(self.im[:,:,x0[0]:x0[-1]+1],axis=2)
+                            if xs>f2:
+                                x1 = sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
+                                cube_supx[:,:,xs] += (frac2-f2) * np.nanmean(self.im[:,:,x1[0]:x1[-1]+1],axis=2)
+                            else:
+                                cube_supx[:,:,xs] += (frac2-f2) * fill_value
+                        else:
+                            cube_supx[:,:,xs] += fill_value
+                            # if self.verbose:
+                            #     warnings.warn('Zero appears at super x = {}'.format(xs))
+                    else:
+                        if xs<=Nxs+f2:
+                            x1 = sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
+                            cube_supx[:,:,xs] += (frac2-f2) * np.nanmean(self.im[:,:,x1[0]:x1[-1]+1],axis=2)
+                            if xs<Nxs+f2:
+                                x0 = sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
+                                cube_supx[:,:,xs] += (f2+frac1) * np.nanmean(self.im[:,:,x0[0]:x0[-1]+1],axis=2)
+                            else:
+                                cube_supx[:,:,xs] += (f2+frac1) * fill_value
+                        else:
+                            cube_supx[:,:,xs] += fill_value
+                            # if self.verbose:
+                            #     warnings.warn('Zero appears at super x = {}'.format(xs))
+                
+                Nys = math.ceil(Ny/yscale)
+                supcube = np.zeros((self.Nw,Nys,Nxs))
+                frac2 = d_y / yscale
+                f2 = math.floor(frac2)
+                frac1 = 1 - frac2
+                for ys in range(Nys):
+                    if fill=='med':
+                        fill_value = np.nanmedian(cube_supx,axis=1)
+                    elif fill=='avg':
+                        fill_value = np.nanmean(cube_supx,axis=1)
+                    else:
+                        fill_value = fill
+                    if frac2>=0:
+                        if ys>=f2:
+                            y0 = sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
+                            supcube[:,ys,:] += (f2+frac1) * np.nanmean(cube_supx[:,y0[0]:y0[-1]+1,:],axis=1)
+                            if ys>f2:
+                                y1 = sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
+                                supcube[:,ys,:] += (frac2-f2) * np.nanmean(cube_supx[:,y1[0]:y1[-1]+1,:],axis=1)
+                            else:
+                                supcube[:,ys,:] += (frac2-f2) * fill_value
+                        else:
+                            supcube[:,ys,:] += fill_value
+                            # if self.verbose:
+                            #     warnings.warn('Zero appears at super y = {}'.format(ys))
+                    else:
+                        if ys<=Nys+f2:
+                            y1 = sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
+                            supcube[:,ys,:] += (frac2-f2) * np.nanmean(cube_supx[:,y1[0]:y1[-1]+1,:],axis=1)
+                            if ys<Nys+f2:
+                                y0 = sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
+                                supcube[:,ys,:] += (f2+frac1) * np.nanmean(cube_supx[:,y0[0]-1:y0[-1],:],axis=1)
+                            else:
+                                supcube[:,ys,:] += (f2+frac1) * fill_value
+                        else:
+                            supcube[:,ys,:] += fill_value
+                            # if self.verbose:
+                            #     warnings.warn('Zero appears at super y = {}'.format(ys))
+                
+                for x in range(Nx):
+                    for y in range(Ny):
+                        xs = pix2sup(x, xscale, origin=0)
+                        ys = pix2sup(y, yscale, origin=0)
+                        self.im[:,y,x] = supcube[:,ys,xs]
 
         return self.im
 
@@ -420,7 +580,7 @@ class improve:
 
         return self.im
 
-    def rebin(self, filOUT=None, pixscale=None, total=False, extrapol=False):
+    def rebin(self, pixscale=None, total=False, extrapol=False, filOUT=None):
         '''
         Shrinking (box averaging) or expanding (bilinear interpolation) astro images
         New/old images collimate on zero point.
@@ -429,7 +589,6 @@ class improve:
         https://github.com/wlandsman/IDLAstro/blob/master/pro/frebin.pro
 
         ------ INPUT ------
-        filOUT              output file
         pixscale            output pixel scale in arcsec/pixel
                               scalar - square pixel
                               tuple - same Ndim with image
@@ -439,6 +598,7 @@ class improve:
         extrapol            Default: False
                               True - value weighted by non NaN fractions
                               False - NaN if any fraction is NaN
+        filOUT              output file
         ------ OUTPUT ------
         newimage            rebinned image array
         '''
@@ -456,6 +616,9 @@ class improve:
             pixscale = listize(pixscale)
             if len(pixscale)==1:
                 pixscale.extend(pixscale)
+            else:
+                warnings.warn('Non-square pixels present as square on DS9. '
+                              'WCS will not work either.')
             ## convert arcsec to degree
             cdelt = np.array(pixscale) / 3600.
             ## Expansion (>1) or contraction (<1) in X/Y
@@ -665,17 +828,13 @@ class improve:
 
             if not total:
                 newimage = np.where(nanbox==0, np.nan, newimage/nanbox)
-                izero = np.where(newimage==0)
-                newimage[izero] = np.nan
+                newimage[newimage==0] = np.nan
             
-        self.hdr = hdr
-        self.im = newimage
-        
         if filOUT is not None:
-            write_fits(filOUT, self.hdr, self.im, self.wvl, self.wmod)
+            write_fits(filOUT, hdr, newimage, self.wvl, self.wmod)
 
         ## Update self variables
-        self.reinit(header=self.hdr, image=self.im, wave=self.wvl,
+        self.reinit(header=hdr, image=newimage, wave=self.wvl,
                     wmod=self.wmod, verbose=self.verbose)
 
         if self.verbose==True:
@@ -686,6 +845,184 @@ class improve:
             print('----------')
             
         return newimage
+
+    def groupixel(self, xscale=1, yscale=1, filOUT=None):
+        '''
+        Group a cluster of pixels (with their mean value)
+
+        ------ INPUT ------
+        xscale,yscale       grouped super pixel size
+        '''
+        Nxs = math.ceil(self.Nx/xscale)
+        Nys = math.ceil(self.Ny/yscale)
+        if self.Ndim==3:
+            ## Super pixels
+            image_supx = np.zeros((self.Nw,self.Ny,Nxs))
+            for xs in range(Nxs):
+                xarr = sup2pix(xs, xscale, Npix=self.Nx, origin=0)
+                print('xarr',xarr)
+                image_supx[:,:,xs] += np.nanmean(self.im[:,:,xarr[0]:xarr[-1]+1],axis=2)
+            supimage = np.zeros((self.Nw,Nys,Nxs))
+            for ys in range(Nys):
+                yarr = sup2pix(ys, yscale, Npix=self.Ny, origin=0)
+                print('yarr',yarr)
+                supimage[:,ys,:] += np.nanmean(image_supx[:,yarr[0]:yarr[-1]+1,:],axis=1)
+            ## Grouped pixels
+            image_grp = np.zeros((self.Nw,self.Ny,self.Nx))
+            for x in range(self.Nx):
+                for y in range(self.Ny):
+                    xs = pix2sup(x, xscale, origin=0)
+                    ys = pix2sup(y, yscale, origin=0)
+                    image_grp[:,y,x] = supimage[:,ys,xs]
+        elif self.Ndim==2:
+            ## Super pixels
+            image_supx = np.zeros((self.Ny,Nxs))
+            for xs in range(Nxs):
+                xarr = sup2pix(xs, xscale, Npix=self.Nx, origin=0)
+                image_supx[:,xs] += np.nanmean(self.im[:,xarr[0]:xarr[-1]+1],axis=1)
+            supimage = np.zeros((Nys,Nxs))
+            for ys in range(Nys):
+                yarr = sup2pix(ys, yscale, Npix=self.Ny, origin=0)
+                supimage[ys,:] += np.nanmean(image_supx[yarr[0]:yarr[-1]+1,:],axis=0)
+            ## Grouped pixels
+            image_grp = np.zeros((self.Ny,self.Nx))
+            for x in range(self.Nx):
+                for y in range(self.Ny):
+                    xs = pix2sup(x, xscale, origin=0)
+                    ys = pix2sup(y, yscale, origin=0)
+                    image_grp[y,x] = supimage[ys,xs]
+
+        if filOUT is not None:
+            write_fits(filOUT, self.hdr, image_grp, self.wvl, self.wmod)
+            
+        ## Update self variables
+        self.reinit(header=self.hdr, image=image_grp, wave=self.wvl,
+                    wmod=self.wmod, verbose=self.verbose)
+
+        return image_grp
+    
+    def smooth(self, smooth=1, wstart=None, filOUT=None):
+        '''
+        Smooth wavelengths
+        If shift, not compatible with unc which needs MC propagation
+
+        ------ INPUT ------
+        smooth              smooth wavelength grid by linear interpolation (Default: 1)
+        wstart              shift wavelength grid to wstart origin (Default: None)
+        '''
+        ## Wavelength shift (within original w range)
+        if wstart is not None:
+            wshift = wstart - self.wvl[0]
+        else:
+            wshift = 0
+            
+        newave = []
+        for k in range(self.Nw):
+            if k%smooth==0:
+                w = self.wvl[k]+wshift
+                if (w>=self.wvl[0] and w<=self.wvl[-1]):
+                    newave.append(w)
+        newave = np.array(newave)
+        Nw = len(newave)
+        newcube = np.empty([Nw,self.Ny,self.Nx])
+        for x in range(self.Nx):
+            for y in range(self.Ny):
+                f = interp1d(self.wvl, self.im[:,y,x], kind='linear')
+                newcube[:,y,x] = f(newave)
+
+        if filOUT is not None:
+            write_fits(filOUT, self.hdr, newcube, newave, self.wmod)
+            
+        ## Update self variables
+        self.reinit(header=self.hdr, image=newcube, wave=newave,
+                    wmod=self.wmod, verbose=self.verbose)
+
+        return newcube
+
+    def artifact(self, filUNC=None, BG_image=None, zerovalue=np.nan,
+                 wmin=None, wmax=None, lim_unc=1.e2, fltr_pn=None, cmin=5,
+                 filOUT=None):
+        '''
+        Remove spectral artifacts (Interpolate aberrant wavelengths)
+        Anormaly if:
+          abs(v - v_med) / unc > lim_unc
+
+        ------ INPUT ------
+        filUNC              input uncertainty map (FITS)
+        filOUT              output spectral map (FITS)
+        BG_image            background image used to generate unc map
+        zerovalue           value used to replace zero value (Default:NaN)
+        wmin,wmax           wavelength range to clean (float)
+        lim_unc             uncertainty dependant factor limit (positive float)
+        fltr_pn             positive/negtive filter (Default: None)
+                              'p' - clean only positive aberrant
+                              'n' - clean only negtive aberrant
+        cmin                minimum neighboring artifacts
+        ------ OUTPUT ------
+        im                  cleaned spectral map
+        '''
+        im = self.im
+        wvl = self.wvl
+        unc = self.uncert(filUNC=filUNC,BG_image=BG_image,zerovalue=zerovalue)
+
+        if wmin is None:
+            wmin = wvl[0]
+        iwi = listize(wvl).index(wvl[closest(wvl,wmin)])
+        if wmax is None:
+            wmax = wvl[-1]
+        iws = listize(wvl).index(wvl[closest(wvl,wmax)])
+
+        if lim_unc<0:
+            raise ValueError('lim_unc must be positive!')
+
+        ## Scan every pixel/spectrum at each wavelength
+        for w in trange(self.Nw, leave=False,
+                        desc='<improve> Cleaning spectral artifacts'):
+            if w>=iwi and w<=iws:
+                pix_x = []
+                pix_y = []
+                for y in range(self.Ny):
+                    for x in range(self.Nx):
+                        v_med = np.median(im[iwi:iws,y,x])
+                        dv = (im[w,y,x] - v_med) / unc[w,y,x]
+                        if fltr_pn is None or fltr_pn=='p':
+                            if dv > lim_unc:
+                                pix_x.append(x)
+                                pix_y.append(y)
+                        if fltr_pn is None or fltr_pn=='n':
+                            if dv < -lim_unc:
+                                pix_x.append(x)
+                                pix_y.append(y)
+                pix_x = np.array(pix_x)
+                pix_y = np.array(pix_y)
+                
+                ## If the neighbors share the feature, not an artifact
+                for ix, x in enumerate(pix_x):
+                    counter = 0
+                    for iy, y in enumerate(pix_y):
+                        if abs(y-pix_y[ix]+pix_x[iy]-x)<=2:
+                            counter += 1
+                    ## max(counter) == 12
+                    if counter<cmin:
+                        if w==0:
+                            im[w,pix_y[ix],x] = im[w+1,pix_y[ix],x]
+                        elif w==self.Nw-1:
+                            im[w,pix_y[ix],x] = im[w-1,pix_y[ix],x]
+                        else:
+                            im[w,pix_y[ix],x] = (im[w-1,pix_y[ix],x]+im[w+1,pix_y[ix],x])/2
+                            # im[w,pix_y[ix],x] = np.median(im[iwi:iws,pix_y[ix],x])
+
+        if filOUT is not None:
+            comment = "Cleaned by <improve.artifact>"
+            write_fits(filOUT, self.hdr, im, wvl,
+                       COMMENT=comment)
+
+        return im
+                
+    def mask(self):
+        '''
+        '''
+        pass
 
 class Jy_per_pix_to_MJy_per_sr(improve):
     '''
@@ -847,6 +1184,46 @@ class irebin(improve):
     def wave(self):
         return self.wvl
 
+class igroupixel(improve):
+    '''
+    GROUP a cluster of PIXELs (with their mean value)
+    '''
+    def __init__(self, filIN, filOUT=None,
+                 xscale=1, yscale=1,
+                 wmod=0, verbose=False):
+        super().__init__(filIN, wmod=wmod, verbose=verbose)
+
+        im_grp = self.groupixel(xscale=xscale, yscale=yscale, filOUT=filOUT)
+
+    def header(self):
+        return self.hdr
+        
+    def image(self):
+        return self.im
+
+    def wave(self):
+        return self.wvl
+    
+class ismooth(improve):
+    '''
+    SMOOTH wavelengths
+    '''
+    def __init__(self, filIN, filOUT=None,
+                 smooth=1, wstart=None,
+                 wmod=0, verbose=False):
+        super().__init__(filIN, wmod=wmod, verbose=verbose)
+
+        im_smooth = self.smooth(smooth=smooth, wstart=wstart, filOUT=filOUT)
+
+    def header(self):
+        return self.hdr
+        
+    def image(self):
+        return self.im
+
+    def wave(self):
+        return self.wvl
+
 class imontage(improve):
     '''
     2D image or 3D cube montage toolkit
@@ -921,18 +1298,17 @@ class imontage(improve):
             filename = os.path.basename(f)
             if filOUT is None:
                 filOUT = self.path_tmp+filename+'_rep'
-            self.file_rep = filOUT
 
             ## Uncertainty propagation
             if dist=='norm':
                 self.rand_norm(f+'_unc')
             elif dist=='splitnorm':
                 self.rand_splitnorm([f+'_unc_N', f+'_unc_P'])
-            write_fits(self.file_rep, self.hdr, self.im, self.wvl, wmod=0)
+            write_fits(filOUT, self.hdr, self.im, self.wvl, wmod=0)
             
             ## Do reprojection
             ##-----------------
-            im = self.func(self.file_rep+fitsext, refheader)[0]
+            im = self.func(filOUT+fitsext, refheader)[0]
             images.append(im)
     
             comment = "Reprojected by <imontage>. "
@@ -954,7 +1330,6 @@ class imontage(improve):
 
             if j==0:
                 im0 = self.reproject(filIN, refheader, filOUT, dist)[0]
-                file_rep = self.file_rep
             else:
                 hyperim.append(self.reproject(filIN, refheader,
                                               filOUT+'_'+str(j), dist)[0])
@@ -964,7 +1339,7 @@ class imontage(improve):
         comment = "Reprojected by <imontage>. "
 
         if Nmc>0:
-            write_fits(file_rep+'_unc', refheader, unc, self.wvl,
+            write_fits(filOUT+'_unc', refheader, unc, self.wvl,
                        COMMENT=comment)
 
         dataset.im0 = im0
@@ -1633,7 +2008,7 @@ class iswarp(improve):
 
     def combine(self, flist, combtype='med',
                 keepedge=False, cropedge=False,
-                uncpdf=None, filOUT=None, tmpdir=None):
+                dist=None, filOUT=None, tmpdir=None):
         '''
         Combine 
 
@@ -1645,7 +2020,7 @@ class iswarp(improve):
                               wgt_avg - inverse variance weighted average
         keepedge            default: False
         cropedge            crop the NaN edge of the frame
-        uncpdf              add uncertainties (filename+'_unc.fits' needed)
+        dist                add uncertainties (filename+'_unc.fits' needed)
         filOUT              output FITS file
         ------ OUTPUT ------
         coadd.head          key for SWarp (inherit self.refheader)
@@ -1693,9 +2068,9 @@ class iswarp(improve):
             
             ## Slice
             super().__init__(flist[i])
-            if uncpdf=='norm':
+            if dist=='norm':
                 self.rand_norm(flist[i]+'_unc')
-            elif uncpdf=='splitnorm':
+            elif dist=='splitnorm':
                 self.rand_splitnorm([flist[i]+'_unc_N', flist[i]+'_unc_P'])
             imlist.append(self.slice(file_slice, ''))
             
@@ -1782,8 +2157,7 @@ class iswarp(improve):
             old_pixel_fov = abs(oldcdelt[0]*oldcdelt[1])
             new_pixel_fov = abs(newcdelt[0]*newcdelt[1])
             newimage = newimage * old_pixel_fov/new_pixel_fov
-            ma_zero = (newimage==0)
-            newimage[ma_zero] = np.nan
+            newimage[newimage==0] = np.nan
             # write_fits(path_comb+'coadd_'+str(k), newheader, newimage)
             # tqdm.write(str(old_pixel_fov))
             # tqdm.write(str(new_pixel_fov))
@@ -1829,6 +2203,43 @@ class iswarp(improve):
 
         return ds
 
+    def reproject_mc(self, filIN, Nmc=0,
+                     combtype='med', keepedge=False, cropedge=False,
+                     dist=None, filOUT=None, tmpdir=None):
+        '''
+        Generate Monte-Carlo uncertainties for reprojected input file
+        '''
+        ds = type('', (), {})()
+
+        hyperim = [] # [j,(w,)y,x]
+        for j in trange(Nmc+1, leave=False,
+                        desc='<iswarp> Reprojection (MC level)'):
+
+            if j==0:
+                comb = self.combine(filIN, filOUT=filOUT, tmpdir=tmpdir,
+                                    keepedge=keepedge, cropedge=cropedge,
+                                    combtype=combtype)
+                im0 = comb.image
+            else:
+                hyperim.append( self.combine(filIN, filOUT=filOUT+'_'+str(j),
+                                             dist=dist, tmpdir=tmpdir,
+                                             keepedge=keepedge, cropedge=cropedge,
+                                             combtype=combtype).image )
+        im0 = np.array(im0)
+        hyperim = np.array(hyperim)
+        unc = np.nanstd(hyperim, axis=0)
+        comment = "Created by <iswarp>"
+
+        if Nmc>0:
+            write_fits(filOUT+'_unc', comb.header, unc, comb.wvl,
+                       COMMENT=comment)
+
+        ds.im0 = im0
+        ds.unc = unc
+        ds.hyperim = hyperim
+
+        return ds
+    
     def clean(self, filIN=None):
         if filIN is not None:
             fclean(filIN)
@@ -2024,351 +2435,222 @@ class iconvolve(improve):
         else:
             if self.path_conv is not None:
                 fclean(self.path_conv)
-
-class respect(improve):
+        
+class cupid(improve):
     '''
-    REstore SPECTra
-    '''
-    def __init__(self, tmpdir=None, verbose=False):
-        '''
-        self: path_tmp, verbose
-        '''
-        if verbose==False:
-            devnull = open(os.devnull, 'w')
-        else:
-            devnull = None
-        self.verbose = verbose
-        self.devnull = devnull
-        
-        ## Set path of tmp files
-        # if tmpdir is None:
-        #     path_tmp = os.getcwd()+'/tmp_rsp/'
-        # else:
-        #     path_tmp = tmpdir
-        # if not os.path.exists(path_tmp):
-        #     os.makedirs(path_tmp)
-        
-        # self.path_tmp = path_tmp
-
-    def concat(self, flist, filOUT=None, comment=None,
-               wsort=False, wrange=None,
-               keepfrag=True, cropedge=False):
-        '''
-        wsort=True can be used with wclean
-        When wsort=False, wrange is used to avoid wavelength overlapping
-
-        '''
-        if wrange is None:
-            wrange = [ (2.50, 5.00), # irc
-                       (5.21, 7.56), # sl2
-                       (7.57, 14.28), # sl1
-                       (14.29, 20.66), # ll2
-                       (20.67, 38.00), ] # ll1
-        wmin = []
-        wmax = []
-        for i in range(len(wrange)):
-            wmin.append(wrange[i][0])
-            wmax.append(wrange[i][1])
-        
-        ## Read data
-        wave = []
-        data = []
-        
-        ## Keep all wavelengths and sort them in ascending order
-        if wsort==True:
-            for f in flist:
-                super().__init__(f)
-                data.append(self.im)
-                wave.append(self.wvl)
-        ## Keep wavelengths in the given ranges (wrange)
-        else:
-            for f in flist:
-                super().__init__(f)
-                imin = closest(wmin, self.wvl[0])
-                imax = closest(wmax, self.wvl[-1])
-                iwi = 0
-                iws = -1
-                for i, w in enumerate(self.wvl[:-2]):
-                    if w<wmin[imin] and self.wvl[i+1]>wmin[imin]:
-                        iwi = i+1
-                    if w<wmax[imax] and self.wvl[i+1]>wmax[imax]:
-                        iws = i+1
-                data.append(self.im[iwi:iws])
-                wave.append(self.wvl[iwi:iws])
-
-        data = np.concatenate(data, axis=0)
-        wave = np.concatenate(wave)
-        hdr = self.hdr
-        ## Sort
-        ind = sorted(range(len(wave)), key=wave.__getitem__)
-        # wave = np.sort(wave)
-        wave = wave[ind]
-        data = data[ind]
-        ## NaN mask
-        if not keepfrag:
-            ma_any = np.isnan(data).any(axis=0)
-            for k in range(len(wave)):
-                data[k][ma_any] = np.nan
-            
-        if cropedge:
-            reframe = improve(header=hdr, image=data, wave=wave)
-            xlist = []
-            for x in range(reframe.Nx):
-                if not np.isnan(reframe.im[:,:,x]).all():
-                    xlist.append(x)
-            ylist = []
-            for y in range(reframe.Ny):
-                if not np.isnan(reframe.im[:,y,:]).all():
-                    ylist.append(y)
-            xmin = min(xlist)
-            xmax = max(xlist)+1
-            ymin = min(ylist)
-            ymax = max(ylist)+1
-            dx = xmax-xmin
-            dy = ymax-ymin
-            x0 = xmin+dx/2
-            y0 = ymin+dy/2
-        
-            reframe.crop(sizpix=(dx,dy), cenpix=(x0,y0))
-            data = reframe.im
-            hdr = reframe.hdr
-            
-        self.wvl_concat = wave
-        self.im_concat = data
-
-        ## Write FITS file
-        if filOUT is not None:
-            write_fits(filOUT, hdr, data, wave, COMMENT=comment)
-
-    def smooth(self, filIN, filUNC=None, BG_image=None, zerovalue=np.nan,
-               wmin=None, wmax=None, lim_unc=1.e2, fltr_pn=None, cmin=5,
-               filOUT=None):
-        '''
-        Remove spectral artifacts (Interpolate aberrant wavelengths)
-        Anormaly if:
-          abs(v - v_med) / unc > lim_unc
-
-        ------ INPUT ------
-        filIN               input spectral map (FITS)
-        filUNC              input uncertainty map (FITS)
-        filOUT              output smoothed spectral map (FITS)
-        BG_image            background image used to generate unc map
-        zerovalue           value used to replace zero value (Default:NaN)
-        wmin                wavelength range to smooth (float)
-        wmax                wavelength range to smooth (float)
-        lim_unc             uncertainty dependant factor limit (positive float)
-        fltr_pn             positive/negtive filter (Default: None)
-                              'p' - smooth only positive aberrant
-                              'n' - smooth only negtive aberrant
-        cmin                minimum neighboring artifacts
-        ------ OUTPUT ------
-        im                  smoothed spectral map
-        '''
-        super().__init__(filIN)
-
-        im = self.im
-        wvl = self.wvl
-        unc = self.uncert(filUNC=filUNC,BG_image=BG_image,zerovalue=zerovalue)
-
-        if wmin is None:
-            wmin = wvl[0]
-        iwi = listize(wvl).index(wvl[closest(wvl,wmin)])
-        if wmax is None:
-            wmax = wvl[-1]
-        iws = listize(wvl).index(wvl[closest(wvl,wmax)])
-
-        if lim_unc<0:
-            raise ValueError('lim_unc must be positive!')
-
-        ## Scan every pixel/spectrum at each wavelength
-        for w in trange(self.Nw, leave=False,
-                        desc='<respect> smooth spectral map'):
-            if w>=iwi and w<=iws:
-                pix_x = []
-                pix_y = []
-                for y in range(self.Ny):
-                    for x in range(self.Nx):
-                        v_med = np.median(im[iwi:iws,y,x])
-                        dv = (im[w,y,x] - v_med) / unc[w,y,x]
-                        if fltr_pn is None or fltr_pn=='p':
-                            if dv > lim_unc:
-                                pix_x.append(x)
-                                pix_y.append(y)
-                        if fltr_pn is None or fltr_pn=='n':
-                            if dv < -lim_unc:
-                                pix_x.append(x)
-                                pix_y.append(y)
-                pix_x = np.array(pix_x)
-                pix_y = np.array(pix_y)
-                
-                ## If the neighbors share the feature, not an artifact
-                for ix, x in enumerate(pix_x):
-                    counter = 0
-                    for iy, y in enumerate(pix_y):
-                        if abs(y-pix_y[ix]+pix_x[iy]-x)<=2:
-                            counter += 1
-                    ## max(counter) == 12
-                    if counter<cmin:
-                        if w==0:
-                            im[w,pix_y[ix],x] = im[w+1,pix_y[ix],x]
-                        elif w==self.Nw-1:
-                            im[w,pix_y[ix],x] = im[w-1,pix_y[ix],x]
-                        else:
-                            im[w,pix_y[ix],x] = (im[w-1,pix_y[ix],x]+im[w+1,pix_y[ix],x])/2
-                            # im[w,pix_y[ix],x] = np.median(im[iwi:iws,pix_y[ix],x])
-
-        if filOUT is not None:
-            comment = "A <respect> smoothed spectral map"
-            write_fits(filOUT, self.hdr, im, wvl,
-                       COMMENT=comment)
-
-        return im
-            
-    def mask(self):
-        '''
-        '''
-        pass
-        
-class sextract(improve):
-    '''
-    AKARI/IRC spectroscopy slit coord extraction
-    s means slit, spectral cube or SAV file
+    
+    AKARI/IRC (slit-)spectroscopy data cube builder
+    via IRC pipeline extracted spectra or SAV file
 
     ------ INPUT ------
     filOUT              output FITS file
-    pathobs             path of IRC dataset
-    parobs[0]           observation id
-    parobs[1]           slit name
-    parobs[2]           IRC N3 (long exp) frame (2MASS corrected; 90 deg rot)
-    parobs[3]           NG(grism)/NP(prism)
-    Nw                  num of wave
-    Ny                  slit length
-    Nx                  slit width
+    ircdir              path of IRC dataset
+    obsid               observation id
+    slit                slit name ('Nh'/'Ns')
+    spec                spec disperser ('NG'/'NP')
+    imref               reference image (IRC N3 long exposure frame; 2MASS corrected; 90 deg rot)
     ------ OUTPUT ------
     '''
-    def __init__(self, pathobs=None, parobs=None, verbose=False):
-        self.path = pathobs + parobs[0] + '/irc_specred_out_' + parobs[1]+'/'
-        filIN = self.path + parobs[2]
-        super().__init__(filIN)
+    def __init__(self, ircdir=None, obsid=None,
+                 slit=None, spec=None, imref=None, verbose=False):
+        self.path = ircdir + obsid + '/irc_specred_out_' + slit+'/'
+        filref = self.path + imref
+        super().__init__(filref) # use N3 header
         
-        self.filSAV = self.path + parobs[0] + '.N3_' + parobs[3] + '.IRC_SPECRED_OUT'
-        self.table = readsav(self.filSAV+savext, python_dict=True)['source_table']
+        self.filsav = self.path + obsid + '.N3_' + spec + '.IRC_SPECRED_OUT'
+        self.table = readsav(self.filsav+savext, python_dict=True)['source_table']
 
         ## Slit width will be corrected during reprojection
-        if parobs[1]=='Ns':
-            self.slit_width = 3 # 5"/1.446" = 3.458 pix (Ns)
-        elif parobs[1]=='Nh':
-            self.slit_width = 2 # 3"/1.446" = 2.075 pix (Nh)
+        if slit=='Ns':
+            self.slit_width = 5 # 5" (Ns)
+            # self.slit_width = 3 # 5"/1.446" = 3.458 pix (Ns)
+        elif slit=='Nh':
+            self.slit_width = 3 # 3" (Nh)
+            # self.slit_width = 2 # 3"/1.446" = 2.075 pix (Nh)
 
         if verbose==True:
             print('\n----------')
             print('Slit extracted from ')
-            print('obs_id: {} \nslit: {}'.format(parobs[0], parobs[1]))
+            print('obs_id: {} \n slit: {}'.format(obsid, slit))
             print('----------\n')
+            self.verbose = verbose
 
-    def rand_pointing(self, sigma=0.):
-        '''
-        Add pointing uncertainty to WCS
-
-        ------ INPUT ------
-        sigma               pointing accuracy (deg)
-        ------ OUTPUT ------
-        '''
-        d_ro = abs(np.random.normal(0., sigma)) # N(0,sigma)
-        d_phi = np.random.random() *2. * np.pi # U(0,2*pi)
-        self.hdr['CRVAL1'] += d_ro * np.cos(d_phi)
-        self.hdr['CRVAL2'] += d_ro * np.sin(d_phi)
-
-        return d_ro, d_phi
-
-    def spec_build(self, filOUT=None, write_unc=True,
-                   Nx=0, Ny=32, Nsub=1, sig_pt=0.):
+        self.obsid = obsid
+        self.slit = slit
+        self.spec = spec
+        self.imref = imref
+                        
+    def spec_build(self, filOUT=None, write_unc=False, dist=None,
+                   Nx=None, Ny=32, Nsub=1, pixscale=None,
+                   wmin=None, wmax=None, tmpdir=None, fiLOG=None,
+                   sig_pt=0, fill='med', supix=False, swarp=False):
         '''
         Build the spectral cube/slit from spectra extracted by IDL pipeline
         (see IRC_SPEC_TOOL, plot_spec_with_image)
 
         ------ INPUT ------
         Nx                  number of (identical) pixels to fit slit width
-                              Default: 0 == (3 for Ns and 2 for Nh)
+                              Default: None (5 for Ns and 3 for Nh when pixscale=1)
         Ny                  number of pixels in spatial direction (Max=32)
-                              Y axis in N3 frame (X axis in focal plane arrays)
+                              Y axis in N3 frame (or X axis in focal plane arrays)
         Nsub                number of subslits
+                              Default: 1 (exact division of Ny)
+        pixscale            pixel size of final grid (Default: None)
+        wmin,wmax           truncate wavelengths
+        sig_pt              pointing accuracy in arcsec (Default: 0)
+        supix               regrouped super pixel of size (xscale,yscale) (Default: False)
+        fill                fill value of no data regions after shift
+                              'med': axis median (default)
+                              'avg': axis average
+                              float: constant
+        swarp               use SWarp to perform position shifts
+                              Default: False (not support supix)
+        fiLOG               build info (Default: None)
         '''
-        if Nx==0:
+        if Nx is None:
             Nx = self.slit_width
         ref_x = self.table['image_y'][0] # slit ref x
         ref_y = 512 - self.table['image_x'][0] # slit ref y
 
         ## Get slit coord from 2MASS corrected N3 frame
         ## Do NOT touch self.im (N3 frame, 2D) before this step
-        self.crop(sizpix=(Nx, Ny), cenpix=(ref_x, ref_y))
+        self.crop(sizpix=(1, Ny), cenpix=(ref_x, ref_y))
         # self.hdr['CTYPE3'] = 'WAVE-TAB'
         self.hdr['CUNIT1'] = 'deg'
         self.hdr['CUNIT2'] = 'deg'
         self.hdr['BUNIT'] = 'MJy/sr'
         self.hdr['EQUINOX'] = 2000.0
 
-        ## Add pointing unc
-        self.rand_pointing(sig_pt)
-
-        ## Read spec
+        ## Read spec - Ny/Nsub should be integer, or there will be a shi(f)t
+        yscale = math.ceil(Ny/Nsub)
         spec_arr = []
         for j in range(Ny):
-            ## Ny/Nsub should be integer, or there will be shift
-            ispec = math.floor(j / (math.ceil(Ny/Nsub)))
-            # spec_arr.append(read_ascii(self.path+'spec'+str(ispec), '.spc', float))
-            allslit = ascii.read(self.path+'spec'+str(ispec)+'.spc')
+            ## ATTENTION: the kw 'space_shift' in IRC pipeline follows the
+            ## focal plane array coordinates, whose x axis corresponds to
+            ## 'image_x'. That means if space_shift>0, x increases.
+            ## When we work in N3 frame coordinates, which rotates 90 deg,
+            ## if space_shift>0, y decreases.
+            ispec = Nsub - 1 - math.floor(j / yscale)
+            readspec = ascii.read(self.path+'spec'+str(ispec)+'.spc')
             subslit = []
-            for k in allslit.keys():
-                subslit.append(allslit[k])
+            for k in readspec.keys():
+                subslit.append(readspec[k])
             subslit = np.array(subslit)
             
             spec_arr.append(subslit)
         ## spec_arr.shape = (Ny,4,Nw)
         spec_arr = np.array(spec_arr)
-        Nw = len(spec_arr[0,0,:])
+        ## Save spec in wave ascending order
+        for i in range(spec_arr.shape[1]):
+            for j in range(Ny):
+                spec_arr[j,i,:] = spec_arr[j,i,::-1]
+        wave = spec_arr[0,0,:]
+        if wmin is None:
+            wmin = wave[0]
+        if wmax is None:
+            wmax = wave[-1]
+        iwi = closest(wave, wmin, side='right')
+        iws = closest(wave, wmax, side='left')+1
+        wave = wave[iwi:iws]
+        Nw = len(wave)
         
-        ## Broaden cube width
-        cube = np.empty([Nw,Ny,Nx])
-        unc = np.empty([Nw,Ny,Nx]) # Symmetric unc
-        unc_N = np.empty([Nw,Ny,Nx]) # Asymmetric negtive
-        unc_P = np.empty([Nw,Ny,Nx]) # Asymmetric positive
-        wave = np.empty(Nw)
+        ## Build cube array
+        cube = np.empty([Nw,Ny,1])
+        unc = np.empty([Nw,Ny,1]) # Symmetric unc
+        unc_N = np.empty([Nw,Ny,1]) # Asymmetric negtive
+        unc_P = np.empty([Nw,Ny,1]) # Asymmetric positive
         for k in range(Nw):
             for j in range(Ny):
-                for i in range(Nx):
-                    cube[k][j][i] = spec_arr[j,1,k]
-                    unc[k][j][i] = (spec_arr[j,3,k]-spec_arr[j,2,k])/2
-                    unc_N[k][j][i] = (spec_arr[j,1,k]-spec_arr[j,2,k])
-                    unc_P[k][j][i] = (spec_arr[j,3,k]-spec_arr[j,1,k])
-            wave[k] = spec_arr[0,0,k]
+                cube[k][j] = spec_arr[j,1,k+iwi]
+                unc[k][j] = (spec_arr[j,3,k+iwi]-spec_arr[j,2,k+iwi])/2
+                unc_N[k][j] = (spec_arr[j,1,k+iwi]-spec_arr[j,2,k+iwi])
+                unc_P[k][j] = (spec_arr[j,3,k+iwi]-spec_arr[j,1,k+iwi])
 
-        ## Save spec in wave ascending order$
-        self.cube = cube[::-1]
-        self.unc = unc[::-1]
-        self.unc_N = unc_N[::-1]
-        self.unc_P = unc_P[::-1]
-        self.wvl = wave[::-1]
+        ## Update self variables (for next steps)
+        self.reinit(header=self.hdr, image=cube, wave=wave,
+                    wmod=self.wmod, verbose=self.verbose)
+
+        ## Uncertainty propagation
+        if dist=='norm':
+            self.rand_norm(unc=unc)
+        elif dist=='splitnorm':
+            self.rand_splitnorm(unc=[unc_N,unc_P])
+        
+        ## Rescale pixel size
+        if pixscale is not None:
+            self.rebin(pixscale=pixscale)
+            self.im = np.delete(self.im, [i+1 for i in range(self.Nx-1)], axis=2) # homo x
+        ## Broaden slit width
+        self.im = np.repeat(self.im, Nx, axis=2)
+        unc = np.repeat(unc, Nx, axis=2)
+        unc_N = np.repeat(unc_N, Nx, axis=2)
+        unc_P = np.repeat(unc_P, Nx, axis=2)
+        self.hdr['CRPIX1'] = (Nx+1)/2
+        ## Extrapolate discrepancy of rebinned slit length (up to pixscale*Nsub)
+        newyscale =  math.ceil(self.Ny/Nsub)
+        dNy = Nsub * newyscale - self.Ny
+        # ystart = (Nsub - 1) * newyscale
+        if newyscale==1:
+            ystart = -1
+        else:
+            ystart = 1 - newyscale
+        val = np.nanmean(self.im[:,ystart:,:], axis=1)
+        arr = np.repeat(val[:,np.newaxis,:], dNy, axis=1)
+        self.im = np.append(self.im, arr, axis=1)
+        self.hdr['CRPIX2'] += (Nx+1)/2
+        ## Update self variables (for next steps)
+        self.reinit(header=self.hdr, image=self.im, wave=self.wvl,
+                    wmod=self.wmod, verbose=self.verbose)
+        # print(self.Nx, self.hdr['CRPIX1'])
+        # print(self.Ny, self.hdr['CRPIX2'])
+        self.xscale = self.Nx
+        self.yscale =  math.ceil(self.Ny/Nsub) # A priori Ny/Nsub is integer...
+
+        ## Add pointing unc
+        if supix:
+            self.rand_pointing(sig_pt, fill=fill, tmpdir=tmpdir,
+                               xscale=self.xscale, yscale=self.yscale, swarp=False)
+        else:
+            self.rand_pointing(sig_pt, fill=fill, tmpdir=tmpdir,
+                               xscale=1, yscale=1, swarp=swarp)
+                
+        ## Update self variables (for next steps)
+        self.reinit(header=self.hdr, image=self.im, wave=self.wvl,
+                    wmod=self.wmod, verbose=self.verbose)
 
         if filOUT is not None:
             comment = "Assembled AKARI/IRC slit spectroscopy cube. "
-            write_fits(filOUT, self.hdr, self.cube, self.wvl,
+            write_fits(filOUT, self.hdr, self.im, self.wvl,
                        COMMENT=comment)
 
             if write_unc==True:
                 uncom = "Assembled AKARI/IRC slit spec uncertainty cube. "
-                write_fits(filOUT+'_unc', self.hdr, self.unc, self.wvl,
+                write_fits(filOUT+'_unc', self.hdr, unc, self.wvl,
                            COMMENT=uncom)
 
                 uncom_N = "Assembled AKARI/IRC slit spec uncertainty (N) cube. "
-                write_fits(filOUT+'_unc_N', self.hdr, self.unc_N, self.wvl,
+                write_fits(filOUT+'_unc_N', self.hdr, unc_N, self.wvl,
                            COMMENT=uncom)
 
                 uncom_P = "Assembled AKARI/IRC slit spec uncertainty (P) cube. "
-                write_fits(filOUT+'_unc_P', self.hdr, self.unc_P, self.wvl,
+                write_fits(filOUT+'_unc_P', self.hdr, unc_P, self.wvl,
                            COMMENT=uncom)
 
-        return self.cube
+        if fiLOG is not None:
+            write_hdf5(fiLOG, 'Observation ID', [self.obsid])
+            write_hdf5(fiLOG, 'NIR Slit', [self.slit], append=True)
+            write_hdf5(fiLOG, 'Spectral disperser', [self.spec], append=True)
+            write_hdf5(fiLOG, 'N3 image',[self.imref], append=True)
+            write_hdf5(fiLOG, 'Pointing accuracy', sig_pt, append=True)
+            write_hdf5(fiLOG, 'Spectral sampling size', self.Nw, append=True)
+            write_hdf5(fiLOG, 'Slit length', self.Ny, append=True)
+            write_hdf5(fiLOG, 'Slit width', self.Nx, append=True)
+            write_hdf5(fiLOG, 'Subslit number', Nsub, append=True)
+            write_hdf5(fiLOG, 'Pixel size', pixscale, append=True)
+            write_hdf5(fiLOG, 'Super pixel size',
+                       [self.xscale, self.yscale], append=True)
+        
+        return self.im
 
     def sav_build(self):
         '''
@@ -2376,14 +2658,17 @@ class sextract(improve):
         Including wave calib, ?, etc. 
         (see IRC_SPEC_TOOL, plot_spec_with_image)
         '''
-        filSAV = self.filSAV
+        print('NOT AVAILABLE')
+        exit()
+        
+        filsav = self.filsav
         table = self.table
         ## Read SAV file
-        image = readsav(filSAV+savext, python_dict=True)['specimage_n_wc']
+        image = readsav(filsav+savext, python_dict=True)['specimage_n_wc']
         image = image[::-1] # -> ascending order
-        noise = readsav(filSAV+savext, python_dict=True)['noisemap_n']
+        noise = readsav(filsav+savext, python_dict=True)['noisemap_n']
         noise = noise[::-1]
-        wave = readsav(filSAV+savext, python_dict=True)['wave_array']
+        wave = readsav(filsav+savext, python_dict=True)['wave_array']
         wave = wave[::-1] # -> ascending order
         Nw = image.shape[0] # num of wave
         Ny = image.shape[1] # slit length
@@ -2405,7 +2690,7 @@ class sextract(improve):
         return self.hdr
     
     def image(self):
-        return self.cube
+        return self.im
 
     def wave(self):
         return self.wvl
@@ -2717,8 +3002,8 @@ def hswarp(oldimage, oldheader, refheader,
 
             oldweight = read_fits(path_tmp+'coadd.weight').data
             if np.sum(oldweight==0)!=0:
-                SP.call('swarp '+swarp_opt+' -RESAMPLING_TYPE BILINEAR '+' old.fits', \
-                    shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
+                SP.call('swarp '+swarp_opt+' -RESAMPLING_TYPE BILINEAR '+' old.fits',
+                        shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
                 edgeimage = read_fits(path_tmp+'coadd').data
                 newweight = read_fits(path_tmp+'coadd.weight').data
                 edgeidx = np.logical_and(oldweight==0, newweight!=0)
@@ -2742,8 +3027,7 @@ def hswarp(oldimage, oldheader, refheader,
     old_pixel_fov = abs(oldcdelt[0]*oldcdelt[1])
     new_pixel_fov = abs(refcdelt[0]*refcdelt[1])
     newimage = newimage * old_pixel_fov/new_pixel_fov
-    ma_zero = (newimage==0)
-    newimage[ma_zero] = np.nan
+    newimage[newimage==0] = np.nan
     # print('-------------------')
     # print(old_pixel_fov/new_pixel_fov)
     write_fits(path_tmp+'new', newheader, newimage)

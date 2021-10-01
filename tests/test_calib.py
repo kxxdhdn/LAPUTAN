@@ -36,8 +36,9 @@ print('spec off / broad band off: ', ic.specoff_ov_bboff)
 
 print('* via FITS file *')
 c1 = intercalib(datdir+'M82')
-sp1 = c1.synthetic_photometry(phots)
-print('Fnu_filt = ', sp1.Fnu_filt.shape)
+sp1 = c1.synthetic_photometry(phots, xscale=2, yscale=3)
+print('Fnu_filt = ', sp1.Fnu_filt)
+print('sup_filt = ', sp1.sup_filt)
 print('wcen = ', sp1.wcen)
 print('smat = ', sp1.smat)
 

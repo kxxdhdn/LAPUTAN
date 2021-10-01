@@ -22,24 +22,72 @@ sys.path.insert(0, testdir+'/..') ## rapyuta path
 from rapyuta.inout import fitsext, read_fits, write_fits
 from rapyuta.astrom import fixwcs
 from rapyuta.imaging import ( improve, Jy_per_pix_to_MJy_per_sr,
-                              islice, icrop, irebin, iswarp,
-                              imontage, iconvolve, respect, sextract,
-                              wclean, interfill, hextract, hswarp )
+                              islice, icrop, irebin, igroupixel, ismooth,
+                              imontage, iswarp, iconvolve, cupid,
+                              wclean, interfill, hextract, hswarp,
+                              concatenate )
 
 print('\n TEST improve ')
 print('--------------')
 imp = improve(datdir+'M83', verbose=True)
-print('raw: ', imp.im[0,0,:])
+print('raw: ', imp.im[0,:,0])
 imp.rand_norm(datdir+'M83_unc')
-print('add sym rand: ', imp.im[0,0,:])
+print('add sym rand: ', imp.im[0,:,0])
 imp.rand_splitnorm([datdir+'M83_unc', datdir+'M83_unc'])
-print('add split rand', imp.im[0,0,:])
+print('add split rand', imp.im[0,:,0])
+imp.rand_pointing(sigma=0.2) # Spitzer IRS  pointing accuracy
+print('add pointing rand: ', imp.im[0,:,0])
 imp.crop(outdir+'M83_imp_crop', sizval=(0.005,0.009), cenpix=(7,8))
 print('See out/M83_imp_crop.fits [Done]')
-imp = improve(datdir+'M83', verbose=True)
-imp.rebin(outdir+'M83_imp_rebin', pixscale=7, 
-          total=False, extrapol=True)
+
+## IRS pointing error estimates
+# Nmc = 20
+# mcimage = []
+# for j in range(Nmc+1):
+#     imp = improve(datdir+'M83', verbose=True)
+#     if j==0:
+#         write_fits(outdir+'irs_pt',
+#                    imp.hdr, imp.im, imp.wvl)
+#     else:
+#         imp.rand_norm(datdir+'M83_unc')
+#         # imp.rand_pointing(sigma=0.2)
+#         mcimage.append(imp.im)
+# if Nmc>1:
+#     mcimage = np.array(mcimage)
+#     unc = np.nanstd(mcimage,axis=0)
+#     write_fits(outdir+'irs_pt_unc',
+#                imp.hdr, unc, imp.wvl)
+
+imp1 = improve(datdir+'M83', verbose=True)
+## Non-square pixel is not compatible with DS9
+imp1.rebin(pixscale=(7,3), total=False, extrapol=True,
+           filOUT=outdir+'M83_imp_rebin')
 print('See out/M83_imp_rebin.fits [Done]')
+
+imp2 = improve(datdir+'M83')
+plt.figure()
+plt.plot(imp2.wvl, imp2.im[:,0,0], c='k', label='raw')
+imp2.smooth(6, wstart=None)
+plt.plot(imp2.wvl, imp2.im[:,0,0], c='g', alpha=.5, label='smoothed')
+plt.savefig(outdir+'M83_imp_smooth')
+plt.close()
+print('See out/M83_imp_smooth.fits [Done]')
+
+imp3 = improve(datdir+'M82')
+plt.figure()
+data = read_fits(datdir+'M82').data[:,0,2]
+wvl = read_fits(datdir+'M82').wave
+unc = read_fits(datdir+'M82_unc').data[:,0,2]
+plt.errorbar(wvl, data, unc, c='k', ecolor='r', label='raw')
+data = imp3.artifact(filUNC=datdir+'M82_unc',
+                     wmin=2.5, wmax=5, lim_unc=1.e2, cmin=6, fltr_pn='n')[:,0,2]
+plt.errorbar(wvl, data, c='g', alpha=.5, label='Artifacts removed')
+plt.legend(loc='best')
+plt.xlim(2,6)
+plt.ylim(-10,20)
+plt.savefig(outdir+'M82_SL_imp_artifact')
+plt.close()
+print('See out/M82_SL_imp_artifact [Done]')
 
 print('\n TEST Jy_per_pix_to_MJy_per_sr ')
 print('-------------------------------')
@@ -51,8 +99,8 @@ print('\n TEST islice ')
 print('-------------')
 slc = islice(datdir+'M83', filSL=outdir+'M83_inv_sqrt',
              filUNC=datdir+'M83_unc', slicetype='inv_sq', postfix='')
-if input('Clean slices (y/n): ')=='y':
-    slc.clean()
+# if input('Clean slices (y/n): ')=='y':
+slc.clean()
 
 print('\n TEST icrop ')
 print('------------')
@@ -64,9 +112,21 @@ print('See out/M83_icrop.fits [Done]')
 
 print('\n TEST irebin ')
 print('-------------')
-rbn = irebin(datdir+'M83', filOUT=outdir+'M83_irebin', verbose=1,
+rbn = irebin(datdir+'M83', filOUT=outdir+'M83_irebin', verbose=True,
              pixscale=1, total=False, extrapol=False)
 print('See out/M83_irebin.fits [Done]')
+
+print('\n TEST igroupixel ')
+print('-----------------')
+grp = igroupixel(datdir+'M83', xscale=3, yscale=4,
+                 filOUT=outdir+'M83_igroupixel')
+print('See out/M83_igroupixel.fits [Done]')
+
+print('\n TEST ismooth ')
+print('--------------')
+smt = ismooth(datdir+'M83', smooth=6, wstart=None,
+              filOUT=outdir+'M83_ismooth')
+print('See out/M83_ismooth.fits [Done]')
 
 print('\n TEST imontage ')
 print('---------------')
@@ -104,26 +164,28 @@ print('Reproject M82_04_SL1 & M82_06N_SL1 to M82_09_L86 [Done]')
 print('\n TEST iswarp ')
 print('-------------')
 hdr_ref = fixwcs(datdir+'M82_09_L86'+fitsext).header
-swp = iswarp(refheader=hdr_ref,
-             tmpdir=outdir+'swp/')
-swp.combine(datdir+'M82_08_L86', uncpdf='norm',
-            filOUT=outdir+'M82_08_L86_rep', tmpdir=outdir+'swp/')
+swp = iswarp(refheader=hdr_ref, tmpdir=outdir+'swp/')
+# swp.combine(datdir+'M82_08_L86', dist='norm',
+#             filOUT=outdir+'M82_08_L86_rep', tmpdir=outdir+'swp/')
+swp.reproject_mc(datdir+'M82_08_L86', dist='norm', Nmc=2,
+                 filOUT=outdir+'M82_08_L86_rep', tmpdir=outdir+'swp/')
 print('Reproject M82_08_L86 to M82_09_L86 [Done]\n')
 
 # swp_cube = iswarp((datdir+'M82_09_L86', datdir+'M82_04_SL1'),
 #                   center='9:55:51,69:40:45', pixscale=6.,
 #                   tmpdir=outdir+'swp_cube/')
-# swp_cube.combine(datdir+'M82_04_SL1', uncpdf='norm',
+# swp_cube.combine(datdir+'M82_04_SL1', dist='norm',
 #                  filOUT=outdir+'M82_04_SL1_rep')
 # print('Reproject M82_04_SL1 (pixscale=6" recentered to M82 center) [Done]')
 swp_cube = iswarp((datdir+'M82_09_L86', datdir+'M82_04_SL1'),
-                  refheader=hdr_ref,
-                  tmpdir=outdir+'swp_cube/')
-swp_cube.combine(datdir+'M82_04_SL1', uncpdf='norm',
-                 # keepedge=True, cropedge=True,
-                 filOUT=outdir+'M82_04_SL1_rep')
+                  refheader=hdr_ref, tmpdir=outdir+'swp_cube/')
+# swp_cube.combine(datdir+'M82_04_SL1', dist='norm',
+#                  # keepedge=True, cropedge=True,
+#                  filOUT=outdir+'M82_04_SL1_rep')
+swp_cube.reproject_mc(datdir+'M82_04_SL1', dist='norm', Nmc=2,
+                      filOUT=outdir+'M82_04_SL1_rep')
 print('Reproject M82_04_SL1 to M82_09_L86 [Done]')
-swp_cube.combine((datdir+'M82_04_SL1',datdir+'M82_06N_SL1'), uncpdf='norm',
+swp_cube.combine((datdir+'M82_04_SL1',datdir+'M82_06N_SL1'), dist='norm',
                  keepedge=True, cropedge=True,
                  filOUT=outdir+'M82_SL1_rep')
 print('Reproject M82_04_SL1 & M82_06N_SL1 to M82_09_L86 [Done]')
@@ -156,67 +218,52 @@ conv = iconvolve(datdir+'M82_IRAC4',
 conv.do_conv(path_idl)
 print('Convolve M82_IRAC4 [Done]')
 
-print('\n TEST sextract ')
-print('---------------')
-slits = ['Ns', 'Nh']
-obsid = [
-    ['3390001.1','F011100297_N002','NG'], # A1-6, H1-2
+print('\n TEST cupid ')
+print('------------')
+parobs = [
+    ['3390001.1','NG','F011100297_N002','Ns',24,2,5],
+    ['3390001.1','NG','F011100297_N002','Nh',28,7,3],
 ]
 buildir = outdir+'/cubuild/'
 if not os.path.exists(buildir):
     os.makedirs(buildir)
 fits_irc = []
-parobs = []
-for obs in obsid:
-    for s in slits:
-        fits_irc.append(buildir+obs[0]+'_'+s)
-        parobs.append([ obs[0], s, obs[1], obs[2] ])
+for obs in parobs:
+    fits_irc.append(obs[0]+'_'+obs[3])
+## MC add pointing unc
+Nmc = 2
 for i in range(len(parobs)):
-    Nsub = 6
-    
-    ## MC add pointing unc
-    Nmc = 3
     for j in range(Nmc+1):
-        sext = sextract(datdir, parobs[i])
         if j==0:
-            sext.spec_build(fits_irc[i],
-                            Nx=4, Ny=24, Nsub=Nsub)
-            rbn = irebin(fits_irc[i], filOUT=fits_irc[i]+'_rbn',pixscale=5)
+            verbose = False
         else:
-            sext.spec_build(fits_irc[i]+'_'+str(j),
-                            Nx=4, Ny=24, Nsub=Nsub)
-            rbn = irebin(fits_irc[i]+'_'+str(j), filOUT=fits_irc[i]+'_'+str(j)+'_rbn',pixscale=5)
-
-print('\n TEST respect ')
-print('--------------')
-rsp = respect()
-
-flist = [datdir+'M82_SL1', datdir+'M82_SL2']
-uncl = [f+'_unc' for f in flist]
-rsp.concat(flist, filOUT=outdir+'M82_SL_concat',
-           keepfrag=False, cropedge=True)
-wvl = rsp.wvl_concat
-data = rsp.im_concat[:,0,0]
-rsp.concat(uncl, filOUT=outdir+'M82_SL_concat_unc')
-unc = rsp.im_concat[:,0,0]
-plt.figure()
-plt.errorbar(wvl, data, unc, c='k', ecolor='r')
-plt.savefig(outdir+'M82_SL_concat')
-print('respect.concat M82_SL1 and M82_SL2 [Done]')
-
-plt.figure()
-data = read_fits(datdir+'M82').data[:,0,2]
-wvl = read_fits(datdir+'M82').wave
-unc = read_fits(datdir+'M82_unc').data[:,0,2]
-plt.errorbar(wvl, data, unc, c='k', ecolor='r', label='raw')
-data = rsp.smooth(datdir+'M82', filUNC=datdir+'M82_unc',
-                  wmin=2.5, wmax=5, lim_unc=1.e2, cmin=6, fltr_pn='n')[:,0,2]
-plt.errorbar(wvl, data, c='g', label='smoothed')
-plt.legend(loc='best')
-plt.xlim(2,6)
-plt.ylim(-10,20)
-plt.savefig(outdir+'M82_smooth')
-print('respect.smooth M82_SL_concat [Done]')
+            verbose = False
+        
+        cup = cupid(datdir, obsid=parobs[i][0], slit=parobs[i][3],
+                    spec=parobs[i][1], imref=parobs[i][2], verbose=verbose)
+        if j==0:
+            cup.spec_build(buildir+fits_irc[i],
+                           write_unc=True, tmpdir=buildir, fiLOG=buildir+'build_history',
+                           Nx=parobs[i][6], Ny=parobs[i][4], Nsub=parobs[i][5],
+                           pixscale=1, wmax=4.3, supix=True)
+        else:
+            cup.spec_build(buildir+fits_irc[i]+'_'+str(j), write_unc=False, tmpdir=buildir,
+                           Nx=parobs[i][6], Ny=parobs[i][4], Nsub=parobs[i][5],
+                           pixscale=1, wmax=4.3, supix=True,
+                           dist='splitnorm', sig_pt=3, fill='med', swarp=False)
+    mcimage = []
+    for j in range(Nmc+1):
+        if j==0:
+            hdr = read_fits(buildir+fits_irc[i]).header
+            wvl = read_fits(buildir+fits_irc[i]).wave
+            data = read_fits(buildir+fits_irc[i]).data
+            write_fits(outdir+fits_irc[i], hdr, data, wvl)
+        else:
+            mcimage.append(read_fits(buildir+fits_irc[i]+'_'+str(j)).data)
+    if Nmc>1:
+        mcimage = np.array(mcimage)
+        unc = np.nanstd(mcimage, axis=0)
+        write_fits(outdir+fits_irc[i]+'_unc', hdr, unc, wvl)
 
 print('\n TEST wclean ')
 print('-------------')
@@ -246,6 +293,21 @@ hswp = hswarp(oldimage, oldheader, refheader, keepedge=True,
 # print('hswarp image: ', hswp.image)
 # print('hswarp image header: ', hswp.header)
 print('See hswp/coadd.fits [Done]')
+
+print('\n TEST concatenate ')
+print('------------------')
+flist = [datdir+'M82_SL1', datdir+'M82_SL2']
+concat = concatenate(flist, filOUT=outdir+'M82_SL_concat',
+                     keepfrag=False, cropedge=True)
+wvl = concat.wave
+data = concat.data[:,0,0]
+uncl = [f+'_unc' for f in flist]
+unc = concatenate(uncl, filOUT=outdir+'M82_SL_concat_unc').data[:,0,0]
+plt.figure()
+plt.errorbar(wvl, data, unc, c='k', ecolor='r')
+plt.savefig(outdir+'M82_SL_concat')
+plt.close()
+print('See out/M82_SL_concat.png [Done]')
 
 if input('Clean tmp files (y/n): ')=='y':
     mtg.clean()

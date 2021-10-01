@@ -1,0 +1,109 @@
+#+TITLE: RAPYUTA archived version log (v<2.0)
+#+AUTHOR: Dangning HU
+
+* Version log
+** v2.0 (20210914)
+- Rename package from ~laputan~ to ~rapyuta~ due to the French pun...thus it turns to the Ghibli origin!
+- ~plots.plotool~
+  + Removed ~set_font~ and fixed font size and tick problems
+  + Added ~set_legend~ which supports lengend boxes outside the axes
+  + Renamed ~set_border~ as ~set_fig~ and added suptitle
+  + ~set_ax~
+    * Added font size kw
+    * Renamed ~xlab~ as ~xlabel~ (idem. for ~ylab~, thus coherent to matplotlib)
+    * Changed ~nonposx~ default value from 'sym' to 'clip'
+  + Note that all kw in ~set_fig~ and ~set_ax~ can also be executed individually with ~self.ax.set_kw~
+** v1.2.4 (20210820)
+- Adopted Python ~warnings.warn~ for warnings in all libraries
+- ~arrays.closest~: Replaced error by warning raised and ignored kw ~side~ when it is not satisfied
+- ~imaging.concatenante~ (Idem. for ~respect.concat~): Removed wrange closest left/right side
+** v1.2.3 (20210817)
+- ~imaging.imontage~: Corrected bugs in ~coadd~ Monte-Carlo uncertainty propagation
+** v1.2.2 (20210803)
+- ~calib.intercalib~
+  + Corrected ~correct_spec~ non-scalar gain/offset input
+- ~imaging.concatenante~ (Idem. for ~respect.concat~)
+  + Added kw ~keepfrag~, ~cropedge~
+  + Corrected indices with sided ~closest~
+** v1.2.1 (20210730)
+- ~arrays.closest~
+  + Added kw ~side~ (default: None)
+- ~calib.intercalib~
+  + Replaced ~specorrect~ kw ~factor~ by ~gain~
+  + Non-scalar ~gain~ and ~offset~
+  + Renamed ~specorrect~ as ~correct_spec~
+  + Extended ~wcenter~ to ~read_filter~ considering discrepancy between broad band offset and spectral offset
+- Removed ~maths.f_lin_p~
+** v1.2 (20210722)
+- Rewrote ~imaging.imontage~
+  + Added ~reproject_function~ kw
+  + ~reproject~ can do 3D cube reprojection without slicing (by deleting SIP kw)
+  + Updated tests
+  + Archived ~reproject~ v0.4 version as ~imontage_v0_4~
+- ~imaging.improve~
+  + Corrected ~self.hdr~ and added ~self.hdred~
+  + Added ~reinit~ (used for auto-updating after ~crop~ and ~rebin~)
+  + Rewrote ~rebin~ with fractional rebinning and NaN extrapolation
+- ~astrom.fixwcs~
+  + Added kw ~mode~ with ~'red_dim'~ (default) and ~'del_sip'~ modes
+- Added ~wcs~ to ~inout.read_fits~ output dataset
+** v1.1.6 (20210701)
+- Added ~maths.f_lin_p~
+- ~imaging.iswarp~
+  + Corrected ~combine~ 2D FITS writing
+** v1.1.5 (20210625)
+- Added ~imaging.iuncert~
+- ~imaging.improve~
+  + Renamed ~uncestimate~ as ~uncert~ and added weighted kw ~wgtbg~, ~filWGT~
+- ~calib.intercalib~
+  + Corrected ~specorrect~ FITS writing (invalid header) and added spatial crop kw ~xlim~, ~ylim~
+  + Added ~wcenter~
+- ~plots.pplot~
+  + Tuned with ~plots.plotool~ changes
+- ~plots.plotool~
+  + Modified ~plot~ kw to assimilate that of ~matplotlib.pyplot.errorbar~
+  + Set ~set_ax~ passive
+  + Added ~set_clib~
+- Added ~utilities.merge_aliases~
+- Modified package name as Library of Astronomical Python Utility Tool for Astrophysics Nerds
+** v1.1.4 (20210624)
+- ~plots.plotool~
+  + Deleted ~Cartesian~ (replaced by ~matplotlib.pyplot.errorbar~)
+  + Extended ~plot~ kw
+- ~imaging.iswarp~
+  + Switched ~combine~ kw ~cropedge~ default to False
+- ~imaging.Jy_per_pix_to_MJy_per_sr~
+  + Corrected errors and added tests
+** v1.1.3 (20210623)
+- ~imaging.improve~
+  + Corrected ~rebin~ 3D FITS writing (lack of wavelength HDU)
+** v1.1.2 (20210622)
+- ~imaging.sextract~
+  + Now ~spec_build~ allows to define slit width with ~Nx~ kw
+  + Added tests
+- Added ~imaging.irebin~
+  + Added tests
+- ~imaging.improve~
+  + Added ~rebin~ inspired by IDL ~hrebin~
+** v1.1.1 (20210621)
+- Added ~imaging.respect~
+  + ~concat~ similar to ~imaging.concatenante~
+  + ~smooth~
+  + Added tests
+- ~imaging.concatenante~
+  + Modified input variables
+- ~imaging.iswarp~
+  + Added ~cropedge~ kw to ~combine~
+- ~imaging.improve~
+  + Added ~uncestimate~
+- Added ~utilities.py~
+  + ~Error~, ~InputError~
+** v1.1 (20210615)
+- ~imaging.iswarp~
+  + Coadd refheader generator
+- Revisited ~imaging.imontage~
+  + Added ~coadd~ with astropy ~reproject~ update (v0.4 \rarr v0.7.1)
+  + Added tests
+- ~__init__.py~
+  + Built a castle in the sky in the welcome banner
+** v1.0 (20210610)

@@ -1,4 +1,4 @@
-#+TITLE: RAPYUTA: libraRy of Astronomical PYthon Utility Tool for Astrophysics nerds
+#+TITLE: RAPYUTA: libraRy of Astronomical PYthon UTilities for Astrophysics nerds
 #+AUTHOR: Dangning HU
 
 * Introduction
@@ -7,6 +7,10 @@ Laputa: Castle in the Sky / 天空の城ラピュタ (Tenkū no Shiro Rapyuta)
 Laputan is an inhabitant of a flying island in Swift's Gulliver's Travels characterized by a neglect of useful occupations and a devotion to visionary projects.
 
 [[./arx/laputa_sketch.jpg][Rapyuta]]
+** Acronyms [[https://forms.gle/bL421uphHmVFqkUU8][(VOTE link)]]
+- libraRy of Astronomical PYthon UTilities for Astrophysics nerds
+- Ready-to-use AstroPhysicists' Yon-jigen poketto UlTimAte edition
+- Real AstroPY UTopiAn
 * Helpdesk
 ** Installation
 #+BEGIN_SRC bash
@@ -27,10 +31,26 @@ Anaconda's environment control is recommanded.
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@outlook.com
 * Version log
+** v2.0.2 (20211001)
+- ~calib.intercalib~
+  + Added super pixel support
+- ~imaging.iswarp~
+  + Added ~reproject_mc~
+- Added ~arrays.pix2sup~, ~arrays.sup2pix~, ~imaging.igroupixel~ and ~imaging.ismooth~
+- Merged ~imaging.respect~ to ~imaging.improve~
+  + Removed ~concat~ (alternative of ~imaging.concatenate~)
+  + Renamed old ~smooth~ to ~artifact~
+  + Added ~smooth~ (new) and ~groupixel~
+- Renamed ~imaging.sextract~ to ~imaging.cupid~
+  + Modified inputs variables
+  + Added super pixel (non-square rebinning) support
+  + Moved ~rand_pointing~ to ~imaging.improve~ and supported convert pos err to flux unc
+  + [VITAL] Reported wrong ~ispec~ in ~spec_build~ in former version
+- Updated tests
 ** v2.0.1 (20210916)
-- Imported error ellipse support from F. Galliano's Python library
+- Imported error ellipse support from a marvelous Python library of F. Galliano
   + ~arrays~: ~arrayize~, ~ramp~
-  + ~plots~: ~Btau~, ~Ctau~, ~ellipse~ and ~SUE~
+  + ~plots~: ~plotrange~, ~Btau~, ~Ctau~, ~ellipse~ and ~SUE~
   + ~plots.plotool~: ~eplot~
 - ~plots.plotool~
   + Fixed the bug when any of ~nrows~ or ~ncols~ equals to 1, self.axes is 1D so self.ax cannot be attributed
@@ -51,97 +71,4 @@ Anaconda's environment control is recommanded.
     * Renamed ~xlab~ as ~xlabel~ (idem. for ~ylab~, thus coherent to matplotlib)
     * Changed ~nonposx~ default value from 'sym' to 'clip'
   + Note that all kw in ~set_fig~ and ~set_ax~ can also be executed individually with ~self.ax.set_kw~
-** v1.2.4 (20210820)
-- Adopted Python ~warnings.warn~ for warnings in all libraries
-- ~arrays.closest~: Replaced error by warning raised and ignored kw ~side~ when it is not satisfied
-- ~imaging.concatenante~ (Idem. for ~respect.concat~): Removed wrange closest left/right side
-** v1.2.3 (20210817)
-- ~imaging.imontage~: Corrected bugs in ~coadd~ Monte-Carlo uncertainty propagation
-** v1.2.2 (20210803)
-- ~calib.intercalib~
-  + Corrected ~correct_spec~ non-scalar gain/offset input
-- ~imaging.concatenante~ (Idem. for ~respect.concat~)
-  + Added kw ~keepfrag~, ~cropedge~
-  + Corrected indices with sided ~closest~
-** v1.2.1 (20210730)
-- ~arrays.closest~
-  + Added kw ~side~ (default: None)
-- ~calib.intercalib~
-  + Replaced ~specorrect~ kw ~factor~ by ~gain~
-  + Non-scalar ~gain~ and ~offset~
-  + Renamed ~specorrect~ as ~correct_spec~
-  + Extended ~wcenter~ to ~read_filter~ considering discrepancy between broad band offset and spectral offset
-- Removed ~maths.f_lin_p~
-** v1.2 (20210722)
-- Rewrote ~imaging.imontage~
-  + Added ~reproject_function~ kw
-  + ~reproject~ can do 3D cube reprojection without slicing (by deleting SIP kw)
-  + Updated tests
-  + Archived ~reproject~ v0.4 version as ~imontage_v0_4~
-- ~imaging.improve~
-  + Corrected ~self.hdr~ and added ~self.hdred~
-  + Added ~reinit~ (used for auto-updating after ~crop~ and ~rebin~)
-  + Rewrote ~rebin~ with fractional rebinning and NaN extrapolation
-- ~astrom.fixwcs~
-  + Added kw ~mode~ with ~'red_dim'~ (default) and ~'del_sip'~ modes
-- Added ~wcs~ to ~inout.read_fits~ output dataset
-** v1.1.6 (20210701)
-- Added ~maths.f_lin_p~
-- ~imaging.iswarp~
-  + Corrected ~combine~ 2D FITS writing
-** v1.1.5 (20210625)
-- Added ~imaging.iuncert~
-- ~imaging.improve~
-  + Renamed ~uncestimate~ as ~uncert~ and added weighted kw ~wgtbg~, ~filWGT~
-- ~calib.intercalib~
-  + Corrected ~specorrect~ FITS writing (invalid header) and added spatial crop kw ~xlim~, ~ylim~
-  + Added ~wcenter~
-- ~plots.pplot~
-  + Tuned with ~plots.plotool~ changes
-- ~plots.plotool~
-  + Modified ~plot~ kw to assimilate that of ~matplotlib.pyplot.errorbar~
-  + Set ~set_ax~ passive
-  + Added ~set_clib~
-- Added ~utilities.merge_aliases~
-- Modified package name as Library of Astronomical Python Utility Tool for Astrophysics Nerds
-** v1.1.4 (20210624)
-- ~plots.plotool~
-  + Deleted ~Cartesian~ (replaced by ~matplotlib.pyplot.errorbar~)
-  + Extended ~plot~ kw
-- ~imaging.iswarp~
-  + Switched ~combine~ kw ~cropedge~ default to False
-- ~imaging.Jy_per_pix_to_MJy_per_sr~
-  + Corrected errors and added tests
-** v1.1.3 (20210623)
-- ~imaging.improve~
-  + Corrected ~rebin~ 3D FITS writing (lack of wavelength HDU)
-** v1.1.2 (20210622)
-- ~imaging.sextract~
-  + Now ~spec_build~ allows to define slit width with ~Nx~ kw
-  + Added tests
-- Added ~imaging.irebin~
-  + Added tests
-- ~imaging.improve~
-  + Added ~rebin~ inspired by IDL ~hrebin~
-** v1.1.1 (20210621)
-- Added ~imaging.respect~
-  + ~concat~ similar to ~imaging.concatenante~
-  + ~smooth~
-  + Added tests
-- ~imaging.concatenante~
-  + Modified input variables
-- ~imaging.iswarp~
-  + Added ~cropedge~ kw to ~combine~
-- ~imaging.improve~
-  + Added ~uncestimate~
-- Added ~utilities.py~
-  + ~Error~, ~InputError~
-** v1.1 (20210615)
-- ~imaging.iswarp~
-  + Coadd refheader generator
-- Revisited ~imaging.imontage~
-  + Added ~coadd~ with astropy ~reproject~ update (v0.4 \rarr v0.7.1)
-  + Added tests
-- ~__init__.py~
-  + Built a castle in the sky in the welcome banner
-** v1.0 (20210610)
+** [[./arx/version_log_arx.org][Archived (v<2.0)]]

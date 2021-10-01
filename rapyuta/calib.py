@@ -12,6 +12,7 @@ Calibration
 """
 
 import os
+import math
 import numpy as np
 # from astropy.io import ascii
 from matplotlib.ticker import ScalarFormatter, NullFormatter
@@ -20,7 +21,7 @@ import warnings
 DEVNULL = open(os.devnull, 'w')
 
 ## Local
-from arrays import listize
+from arrays import listize, pix2sup, sup2pix
 from inout import (ascext, fitsext, h5ext,
                    read_fits, write_fits,
                    read_hdf5, write_hdf5#, read_ascii
@@ -115,7 +116,8 @@ class intercalib:
         SP.call('rm -rf '+fortIN+h5ext, shell=True, cwd=os.getcwd())
         SP.call('rm -rf '+fortOUT+h5ext, shell=True, cwd=os.getcwd())
 
-    def synthetic_photometry(self, filt, w_spec=None, Fnu_spec=None, 
+    def synthetic_photometry(self, filt, w_spec=None, Fnu_spec=None,
+                             xscale=1, yscale=1, 
                              extrapoff=True, verbose=False):
         '''
         External Fortran library (SwING) needed
@@ -150,6 +152,19 @@ class intercalib:
         else:
             Ndim = 3
 
+        ## Super pixels
+        Nw, Ny, Nx = Fnu_spec.shape
+        Nxs = math.ceil(Nx/xscale)
+        spec_supx = np.zeros((Nw,Ny,Nxs))
+        for xs in range(Nxs):
+            x = sup2pix(xs, xscale, Npix=Nx, origin=0)
+            spec_supx[:,:,xs] += np.nanmean(Fnu_spec[:,:,x[0]:x[-1]+1],axis=2)
+        Nys = math.ceil(Ny/yscale)
+        sup_spec = np.zeros((Nw,Nys,Nxs))
+        for ys in range(Nys):
+            y = sup2pix(ys, yscale, Npix=Ny, origin=0)
+            sup_spec[:,ys,:] += np.nanmean(spec_supx[:,y[0]:y[-1]+1,:],axis=1)
+
         ## Do not extrapolate the wave grid that is not covered by input spectra
         ##-----------------------------------------------------------------------
         if extrapoff==True:
@@ -166,11 +181,11 @@ class intercalib:
                                   'due to uncovered wavelengths'.format(phot))
             ## Insert 2 wvl (0.01 um & w_spec[0]-0.01 um) with 0 value
             wave = np.insert(w_spec, 0, (.01, w_spec[0]-.01))
-            flux = np.insert(Fnu_spec, 0, np.zeros(Fnu_spec.shape[-1]), axis=0)
-            flux = np.insert(flux, 0, np.zeros(Fnu_spec.shape[-1]), axis=0)
+            flux = np.insert(sup_spec, 0, np.zeros(sup_spec.shape[-1]), axis=0)
+            flux = np.insert(flux, 0, np.zeros(sup_spec.shape[-1]), axis=0)
         else:
             wave = w_spec
-            flux = Fnu_spec
+            flux = sup_spec
 
         ## Write input.h5
         ##----------------
@@ -190,19 +205,29 @@ class intercalib:
         fortOUT = os.getcwd()+'/synthetic_photometry_output'
 
         ds.wcen = read_hdf5(fortOUT, 'Central wavelength (microns)')
-        ds.Fnu_filt = read_hdf5(fortOUT, 'Flux (x.Hz-1)')
+        ds.sup_filt = read_hdf5(fortOUT, 'Flux (x.Hz-1)')
         ds.smat = read_hdf5(fortOUT, 'Standard deviation matrix')
-        
+
+        ## Original pixels
+        ds.Fnu_filt = np.zeros((Nw,Ny,Nx))
+        for x in range(Nx):
+            for y in range(Ny):
+                xs = pix2sup(x, xscale, origin=0)
+                ys = pix2sup(y, yscale, origin=0)
+                ds.Fnu_filt[:,y,x] = ds.sup_filt[:,ys,xs]
+
         ## Convert zeros to NaNs
-        ma_zero = np.ma.array(ds.Fnu_filt, mask=(ds.Fnu_filt==0)).mask
-        ds.Fnu_filt[ma_zero] = np.nan
+        ds.sup_filt[ds.sup_filt==0] = np.nan
+        ds.Fnu_filt[ds.Fnu_filt==0] = np.nan
 
         ## Reform outputs
         if Ndim==1:
             ds.Fnu_filt = ds.Fnu_filt[:,0,0]
+            ds.sup_filt = ds.sup_filt[:,0,0]
         if len(ds.wcen)==1:
             ds.wcen = ds.wcen[0]
             ds.Fnu_filt = ds.Fnu_filt[0]
+            ds.sup_filt = ds.sup_filt[0]
             ds.smat = ds.smat[0][0]
         
         ## Clean temperary h5 files

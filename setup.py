@@ -2,10 +2,10 @@ from setuptools import setup
 
 setup(
     name = 'rapyuta',
-    version = '2.0.1',
+    version = '2.0.2',
     author = 'D. HU',
     author_email = 'dangning.hu@outlook.com',
-    description = 'libraRy of Astronomical PYthon Utility Tool for Astrophysics nerds',
+    description = 'libraRy of Astronomical PYthon UTilities for Astrophysics nerds',
     license = 'BSD',
     keywords = 'astronomy astrophysics astrometry imaging spectroscopy spitzer akari jwst',
     url = 'https://github.com/kxxdhdn/RAPYUTA',
@@ -18,7 +18,7 @@ setup(
     python_requires='>=3.6',
     install_requires = [
         'numpy', 'scipy', 'matplotlib', 
-        'astropy', 'reproject', 'h5py', 'tqdm', 
+        'astropy', 'reproject>=0.7.1', 'h5py', 'tqdm', 
     ],
     classifiers=[
         'Programming Language :: Python :: 3',
