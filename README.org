@@ -31,6 +31,19 @@ Anaconda's environment control is recommanded.
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@outlook.com
 * Version log
+** v2.0.3 (20211008)
+- Updated output name conventions
+  + 'type' outputs (e.g. ~ds~): ~header~, ~data~, ~unc~, ~wave~, ~hyperdata~, etc.
+  + 'class' outputs (e.g. ~improve~): ~hdr~, ~im~, ~unc~, ~wvl~, etc.
+  + 'class' function ouputs: ~header()~, ~image()~, ~unc~, ~wave()~
+- Added ~rand_pointing~ to all functions with ~dist~
+- Revisited all 3D/2D conditional statements with ~self.Ndim~
+- ~imaging.improve~
+  + Added original NaN mask for ~rand_pointing~ (in order not to invent data at NaN pixels)
+  + Changed resampling from 'by axis' to 'by grouped pixels' for ~groupixel~ (NaN mean)
+- ~imaging.iswarp~
+  + Renamed ~reproject_mc~ to ~combine_mc~ (which works also for coadding)
+- ~imaging.cupid~: minor changes in outputs
 ** v2.0.2 (20211001)
 - ~calib.intercalib~
   + Added super pixel support

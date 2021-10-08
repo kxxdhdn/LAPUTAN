@@ -3,6 +3,7 @@
 
 import sys, os, logging, warnings
 # logging.disable(sys.maxsize)
+warnings.filterwarnings("ignore", category=RuntimeWarning) 
 warnings.filterwarnings("ignore", message="Skipping SYSTEM_VARIABLE record")
 
 ## Set dir
@@ -30,13 +31,13 @@ from rapyuta.imaging import ( improve, Jy_per_pix_to_MJy_per_sr,
 print('\n TEST improve ')
 print('--------------')
 imp = improve(datdir+'M83', verbose=True)
-print('raw: ', imp.im[0,:,0])
+print('raw: ', imp.im[0,:,3])
 imp.rand_norm(datdir+'M83_unc')
-print('add sym rand: ', imp.im[0,:,0])
+print('add sym rand: ', imp.im[0,:,3])
 imp.rand_splitnorm([datdir+'M83_unc', datdir+'M83_unc'])
-print('add split rand', imp.im[0,:,0])
-imp.rand_pointing(sigma=0.2) # Spitzer IRS  pointing accuracy
-print('add pointing rand: ', imp.im[0,:,0])
+print('add split rand', imp.im[0,:,3])
+imp.rand_pointing(sigma=0.2, fill='near') # Spitzer IRS  pointing accuracy
+print('add pointing rand: ', imp.im[0,:,3])
 imp.crop(outdir+'M83_imp_crop', sizval=(0.005,0.009), cenpix=(7,8))
 print('See out/M83_imp_crop.fits [Done]')
 
@@ -136,8 +137,7 @@ write_fits(outdir+'sip', hdr, ds.data[0])
 
 mtg = imontage('exact', tmpdir=outdir+'mtg/')
 hdr_ref = fixwcs(datdir+'M82_template'+fitsext).header
-mtg.reproject_mc(outdir+'sip', refheader=hdr_ref,
-                 filOUT=outdir+'sip_mtgrep')
+mtg.reproject_mc(outdir+'sip', refheader=hdr_ref, filOUT=outdir+'sip_mtgrep')
 hdr_nosip = hdr.copy()
 for kw in hdr.keys():
     if ('A_' in kw) and (not 'PA' in kw) and (not 'RA' in kw):
@@ -153,13 +153,12 @@ for kw in hdr.keys():
         # print(kw)
         del hdr_nosip[kw]
 write_fits(outdir+'nosip', hdr_nosip, ds.data[0])
-mtg.reproject_mc(outdir+'nosip', refheader=hdr_ref,
-                 filOUT=outdir+'nosip_mtgrep')
+mtg.reproject_mc(outdir+'nosip', refheader=hdr_ref, filOUT=outdir+'nosip_mtgrep')
 print('SIP kw can be removed since they are encoded in CD matrix! [Done]')
 mtg.coadd((datdir+'M82_04_SL1',datdir+'M82_06N_SL1'),
-          refheader=hdr_ref, dist='norm', Nmc=2,
-          filOUT=outdir+'M82_SL1_mtgrep')
-print('Reproject M82_04_SL1 & M82_06N_SL1 to M82_09_L86 [Done]')
+          refheader=hdr_ref, dist='norm', sig_pt=.2, fill_pt='near', Nmc=2,
+          filOUT=outdir+'M82_SL1_mtgcoadd')
+print('Coadd M82_04_SL1 & M82_06N_SL1 to M82_09_L86 [Done]')
 
 print('\n TEST iswarp ')
 print('-------------')
@@ -167,28 +166,21 @@ hdr_ref = fixwcs(datdir+'M82_09_L86'+fitsext).header
 swp = iswarp(refheader=hdr_ref, tmpdir=outdir+'swp/')
 # swp.combine(datdir+'M82_08_L86', dist='norm',
 #             filOUT=outdir+'M82_08_L86_rep', tmpdir=outdir+'swp/')
-swp.reproject_mc(datdir+'M82_08_L86', dist='norm', Nmc=2,
-                 filOUT=outdir+'M82_08_L86_rep', tmpdir=outdir+'swp/')
+swp.combine_mc(datdir+'M82_08_L86', dist='norm', sig_pt=.2, Nmc=2,
+               filOUT=outdir+'M82_08_L86_rep', tmpdir=outdir+'swp/')
 print('Reproject M82_08_L86 to M82_09_L86 [Done]\n')
-
-# swp_cube = iswarp((datdir+'M82_09_L86', datdir+'M82_04_SL1'),
-#                   center='9:55:51,69:40:45', pixscale=6.,
-#                   tmpdir=outdir+'swp_cube/')
-# swp_cube.combine(datdir+'M82_04_SL1', dist='norm',
-#                  filOUT=outdir+'M82_04_SL1_rep')
-# print('Reproject M82_04_SL1 (pixscale=6" recentered to M82 center) [Done]')
 swp_cube = iswarp((datdir+'M82_09_L86', datdir+'M82_04_SL1'),
-                  refheader=hdr_ref, tmpdir=outdir+'swp_cube/')
-# swp_cube.combine(datdir+'M82_04_SL1', dist='norm',
-#                  # keepedge=True, cropedge=True,
-#                  filOUT=outdir+'M82_04_SL1_rep')
-swp_cube.reproject_mc(datdir+'M82_04_SL1', dist='norm', Nmc=2,
-                      filOUT=outdir+'M82_04_SL1_rep')
-print('Reproject M82_04_SL1 to M82_09_L86 [Done]')
-swp_cube.combine((datdir+'M82_04_SL1',datdir+'M82_06N_SL1'), dist='norm',
-                 keepedge=True, cropedge=True,
-                 filOUT=outdir+'M82_SL1_rep')
-print('Reproject M82_04_SL1 & M82_06N_SL1 to M82_09_L86 [Done]')
+                  center='9:55:51,69:40:45', pixscale=6.,
+                  tmpdir=outdir+'swp_cube/')
+swp_cube.combine(datdir+'M82_04_SL1', dist='norm',
+                 filOUT=outdir+'M82_04_SL1_rep')
+print('Reproject M82_04_SL1 (pixscale=6" recentered to M82 center) [Done]')
+swp_coadd = iswarp((datdir+'M82_09_L86', datdir+'M82_04_SL1'),
+                 refheader=hdr_ref, tmpdir=outdir+'swp_cube/')
+swp_coadd.combine_mc((datdir+'M82_04_SL1',datdir+'M82_06N_SL1'),
+                   dist='norm', sig_pt=.2, Nmc=2,
+                   keepedge=True, cropedge=True, filOUT=outdir+'M82_SL1_swp_coadd')
+print('Coadd M82_04_SL1 & M82_06N_SL1 to M82_09_L86 [Done]')
 
 print('\n TEST iconvolve ')
 print('----------------')
@@ -207,6 +199,7 @@ for p in psf:
     irs_ker.append(path_ker+'Kernel_HiRes_Gauss_0'+str(p)+'_to_'+psf_ref)
 conv_cube = iconvolve(datdir+'M82_04_SL1',
                       kfile=irs_ker, klist=csv_ker,
+                      dist='norm', sig_pt=.2,
                       convdir=convdir, filOUT=outdir+'M82_04_SL1'+'_conv')
 conv_cube.do_conv(path_idl, verbose=False)
 print('Convolve M82_04_SL1 [Done]')
@@ -243,14 +236,14 @@ for i in range(len(parobs)):
                     spec=parobs[i][1], imref=parobs[i][2], verbose=verbose)
         if j==0:
             cup.spec_build(buildir+fits_irc[i],
-                           write_unc=True, tmpdir=buildir, fiLOG=buildir+'build_history',
+                           filRAW=buildir+'raw', tmpdir=buildir, fiLOG=buildir+'build_history',
                            Nx=parobs[i][6], Ny=parobs[i][4], Nsub=parobs[i][5],
                            pixscale=1, wmax=4.3, supix=True)
         else:
-            cup.spec_build(buildir+fits_irc[i]+'_'+str(j), write_unc=False, tmpdir=buildir,
+            cup.spec_build(buildir+fits_irc[i]+'_'+str(j), tmpdir=buildir,
                            Nx=parobs[i][6], Ny=parobs[i][4], Nsub=parobs[i][5],
                            pixscale=1, wmax=4.3, supix=True,
-                           dist='splitnorm', sig_pt=3, fill='med', swarp=False)
+                           dist='splitnorm', sig_pt=3, fill_pt='med', swarp=False)
     mcimage = []
     for j in range(Nmc+1):
         if j==0:
@@ -290,7 +283,7 @@ oldheader = old.header
 refheader = read_fits(datdir+'M82_09_L86').header
 hswp = hswarp(oldimage, oldheader, refheader, keepedge=True,
               tmpdir=outdir+'hswp/', verbose=False)
-# print('hswarp image: ', hswp.image)
+# print('hswarp image: ', hswp.data)
 # print('hswarp image header: ', hswp.header)
 print('See hswp/coadd.fits [Done]')
 

@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name = 'rapyuta',
-    version = '2.0.2',
+    version = '2.0.3',
     author = 'D. HU',
     author_email = 'dangning.hu@outlook.com',
     description = 'libraRy of Astronomical PYthon UTilities for Astrophysics nerds',

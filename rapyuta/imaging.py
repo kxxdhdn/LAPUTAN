@@ -27,7 +27,7 @@ Imaging
     imontage(improve):
         reproject, reproject_mc, coadd, clean
     iswarp(improve):
-        footprint, combine, reproject_mc, clean
+        footprint, combine, combine_mc, clean
     iconvolve(improve):
         spitzer_irs, choker, do_conv, image, wave,
         filenames, clean
@@ -52,6 +52,8 @@ from reproject import reproject_interp, reproject_exact, reproject_adaptive
 from reproject.mosaicking import reproject_and_coadd
 import subprocess as SP
 import warnings
+# warnings.filterwarnings("ignore", category=RuntimeWarning) 
+# warnings.filterwarnings("ignore", message="Skipping SYSTEM_VARIABLE record")
 
 ## Local
 from utilities import InputError
@@ -202,12 +204,12 @@ class improve:
             if BG_weight is not None:
                 if self.Ndim==3:
                     sigma = np.nanstd(im * BG_weight, axis=(1,2))
-                else:
+                elif self.Ndim==2:
                     sigma = np.nanstd(im * BG_weight)
             else:
                 if self.Ndim==3:
                     sigma = np.nanstd(im, axis=(1,2))
-                else:
+                elif self.Ndim==2:
                     sigma = np.nanstd(im)
 
             ## wgt: weight map
@@ -222,7 +224,7 @@ class improve:
                 for w in range(Nw):
                     unc.append(np.sqrt(1./wgt[w,:,:]) * sigma(w))
                 unc = np.array(unc)
-            else:
+            elif self.Ndim==2:
                 unc = np.sqrt(1./wgt) * sigma
 
             ## Replace zero values
@@ -300,21 +302,14 @@ class improve:
         fill                fill value of no data regions after shift
                               'med': axis median (default)
                               'avg': axis average
+                              'near': nearest non-NaN value on the same axis
                               float: constant
         xscale,yscale       regrouped super pixel size
         swarp               use SWarp to perform position shifts
                               Default: False (not support supix)
         ------ OUTPUT ------
         '''
-        ## Set path of tmp files
-        if tmpdir is None:
-            path_tmp = os.getcwd()+'/tmp_swp/'
-        else:
-            path_tmp = tmpdir
-        if not os.path.exists(path_tmp):
-            os.makedirs(path_tmp)
-        
-        if sigma!=0:
+        if sigma>=0:
             sigma /= 3600.
             d_ro = abs(np.random.normal(0., sigma)) # N(0,sigma)
             d_phi = np.random.random() *2. * np.pi # U(0,2*pi)
@@ -340,100 +335,226 @@ class improve:
             # d_x, d_y = wcs.all_world2pix(val1[np.newaxis,:], 1)[0] - 0.5
             # print('Near (1,1) increments: ', d_x, d_y)
 
+            oldimage = self.im
+
             ## Resampling
             if swarp:
+                ## Set path of tmp files (SWarp use only)
+                if tmpdir is None:
+                    path_tmp = os.getcwd()+'/tmp_swp/'
+                else:
+                    path_tmp = tmpdir
+                if not os.path.exists(path_tmp):
+                    os.makedirs(path_tmp)
+                ## Works but can be risky since iswarp.combine included rand_pointing...
                 write_fits(path_tmp+'tmp_rand_shift',
                            newheader, self.im, self.wvl)
                 swp = iswarp(refheader=self.hdr, tmpdir=path_tmp)
                 rep = swp.combine(path_tmp+'tmp_rand_shift',
                                   combtype='avg', keepedge=True)
-                self.im = rep.image
-                self.im[np.isnan(rep.image)] = 0
+                self.im = rep.data
             else:
-                Nxs = math.ceil(Nx/xscale)
-                cube_supx = np.zeros((self.Nw,Ny,Nxs))
-                frac2 = d_x / xscale
-                f2 = math.floor(frac2)
-                frac1 = 1 - frac2
-                for xs in range(Nxs):
-                    if fill=='med':
-                        fill_value = np.nanmedian(self.im,axis=2)
-                    elif fill=='avg':
-                        fill_value = np.nanmean(self.im,axis=2)
-                    else:
-                        fill_value = fill
-                    if frac2>=0:
-                        if xs>=f2:
-                            x0 = sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
-                            cube_supx[:,:,xs] += (f2+frac1) * np.nanmean(self.im[:,:,x0[0]:x0[-1]+1],axis=2)
-                            if xs>f2:
-                                x1 = sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
-                                cube_supx[:,:,xs] += (frac2-f2) * np.nanmean(self.im[:,:,x1[0]:x1[-1]+1],axis=2)
-                            else:
-                                cube_supx[:,:,xs] += (frac2-f2) * fill_value
+                if self.Ndim==3:
+                    Nxs = math.ceil(Nx/xscale)
+                    cube_supx = np.zeros((self.Nw,Ny,Nxs))
+                    frac2 = d_x / xscale
+                    f2 = math.floor(frac2)
+                    frac1 = 1 - frac2
+                    for xs in range(Nxs):
+                        if frac2>=0:
+                            x0 = sup2pix(0, xscale, Npix=Nx, origin=0)
                         else:
-                            cube_supx[:,:,xs] += fill_value
-                            # if self.verbose:
-                            #     warnings.warn('Zero appears at super x = {}'.format(xs))
-                    else:
-                        if xs<=Nxs+f2:
-                            x1 = sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
-                            cube_supx[:,:,xs] += (frac2-f2) * np.nanmean(self.im[:,:,x1[0]:x1[-1]+1],axis=2)
-                            if xs<Nxs+f2:
-                                x0 = sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
-                                cube_supx[:,:,xs] += (f2+frac1) * np.nanmean(self.im[:,:,x0[0]:x0[-1]+1],axis=2)
-                            else:
-                                cube_supx[:,:,xs] += (f2+frac1) * fill_value
+                            x0 = sup2pix(Nxs-1, xscale, Npix=Nx, origin=0)
+                        if fill=='med':
+                            fill_value = np.nanmedian(self.im,axis=2)
+                        elif fill=='avg':
+                            fill_value = np.nanmean(self.im,axis=2)
+                        elif fill=='near':
+                            fill_value = np.nanmean(self.im[:,:,x0[0]:x0[-1]+1],axis=2)
                         else:
-                            cube_supx[:,:,xs] += fill_value
-                            # if self.verbose:
-                            #     warnings.warn('Zero appears at super x = {}'.format(xs))
-                
-                Nys = math.ceil(Ny/yscale)
-                supcube = np.zeros((self.Nw,Nys,Nxs))
-                frac2 = d_y / yscale
-                f2 = math.floor(frac2)
-                frac1 = 1 - frac2
-                for ys in range(Nys):
-                    if fill=='med':
-                        fill_value = np.nanmedian(cube_supx,axis=1)
-                    elif fill=='avg':
-                        fill_value = np.nanmean(cube_supx,axis=1)
-                    else:
-                        fill_value = fill
-                    if frac2>=0:
-                        if ys>=f2:
-                            y0 = sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
-                            supcube[:,ys,:] += (f2+frac1) * np.nanmean(cube_supx[:,y0[0]:y0[-1]+1,:],axis=1)
-                            if ys>f2:
-                                y1 = sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
-                                supcube[:,ys,:] += (frac2-f2) * np.nanmean(cube_supx[:,y1[0]:y1[-1]+1,:],axis=1)
+                            fill_value = fill
+                        if frac2>=0:
+                            if xs>=f2:
+                                x1 = sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
+                                cube_supx[:,:,xs] += (f2+frac1) * np.nanmean(self.im[:,:,x1[0]:x1[-1]+1],axis=2)
+                                if xs>f2:
+                                    x2 = sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
+                                    cube_supx[:,:,xs] += (frac2-f2) * np.nanmean(self.im[:,:,x2[0]:x2[-1]+1],axis=2)
+                                else:
+                                    cube_supx[:,:,xs] += (frac2-f2) * fill_value
                             else:
-                                supcube[:,ys,:] += (frac2-f2) * fill_value
+                                cube_supx[:,:,xs] += fill_value
+                                # if self.verbose:
+                                #     warnings.warn('Zero appears at super x = {}'.format(xs))
                         else:
-                            supcube[:,ys,:] += fill_value
-                            # if self.verbose:
-                            #     warnings.warn('Zero appears at super y = {}'.format(ys))
-                    else:
-                        if ys<=Nys+f2:
-                            y1 = sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
-                            supcube[:,ys,:] += (frac2-f2) * np.nanmean(cube_supx[:,y1[0]:y1[-1]+1,:],axis=1)
-                            if ys<Nys+f2:
-                                y0 = sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
-                                supcube[:,ys,:] += (f2+frac1) * np.nanmean(cube_supx[:,y0[0]-1:y0[-1],:],axis=1)
+                            if xs<=Nxs+f2:
+                                x2 = sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
+                                cube_supx[:,:,xs] += (frac2-f2) * np.nanmean(self.im[:,:,x2[0]:x2[-1]+1],axis=2)
+                                if xs<Nxs+f2:
+                                    x1 = sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
+                                    cube_supx[:,:,xs] += (f2+frac1) * np.nanmean(self.im[:,:,x1[0]:x1[-1]+1],axis=2)
+                                else:
+                                    cube_supx[:,:,xs] += (f2+frac1) * fill_value
                             else:
-                                supcube[:,ys,:] += (f2+frac1) * fill_value
+                                cube_supx[:,:,xs] += fill_value
+                                # if self.verbose:
+                                #     warnings.warn('Zero appears at super x = {}'.format(xs))
+                    
+                    Nys = math.ceil(Ny/yscale)
+                    supcube = np.zeros((self.Nw,Nys,Nxs))
+                    frac2 = d_y / yscale
+                    f2 = math.floor(frac2)
+                    frac1 = 1 - frac2
+                    for ys in range(Nys):
+                        if frac2>=0:
+                            y0 = sup2pix(0, yscale, Npix=Ny, origin=0)
                         else:
-                            supcube[:,ys,:] += fill_value
-                            # if self.verbose:
-                            #     warnings.warn('Zero appears at super y = {}'.format(ys))
-                
-                for x in range(Nx):
-                    for y in range(Ny):
-                        xs = pix2sup(x, xscale, origin=0)
-                        ys = pix2sup(y, yscale, origin=0)
-                        self.im[:,y,x] = supcube[:,ys,xs]
+                            y0 = sup2pix(Nys-1, yscale, Npix=Ny, origin=0)
+                        if fill=='med':
+                            fill_value = np.nanmedian(cube_supx,axis=1)
+                        elif fill=='avg':
+                            fill_value = np.nanmean(cube_supx,axis=1)
+                        elif fill=='near':
+                            fill_value = np.nanmean(cube_supx[:,y0[0]:y0[-1]+1,:],axis=1)
+                        else:
+                            fill_value = fill
+                        if frac2>=0:
+                            if ys>=f2:
+                                y1 = sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
+                                supcube[:,ys,:] += (f2+frac1) * np.nanmean(cube_supx[:,y1[0]:y1[-1]+1,:],axis=1)
+                                if ys>f2:
+                                    y2 = sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
+                                    supcube[:,ys,:] += (frac2-f2) * np.nanmean(cube_supx[:,y2[0]:y2[-1]+1,:],axis=1)
+                                else:
+                                    supcube[:,ys,:] += (frac2-f2) * fill_value
+                            else:
+                                supcube[:,ys,:] += fill_value
+                                # if self.verbose:
+                                #     warnings.warn('Zero appears at super y = {}'.format(ys))
+                        else:
+                            if ys<=Nys+f2:
+                                y2 = sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
+                                supcube[:,ys,:] += (frac2-f2) * np.nanmean(cube_supx[:,y2[0]:y2[-1]+1,:],axis=1)
+                                if ys<Nys+f2:
+                                    y1 = sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
+                                    supcube[:,ys,:] += (f2+frac1) * np.nanmean(cube_supx[:,y1[0]-1:y1[-1],:],axis=1)
+                                else:
+                                    supcube[:,ys,:] += (f2+frac1) * fill_value
+                            else:
+                                supcube[:,ys,:] += fill_value
+                                # if self.verbose:
+                                #     warnings.warn('Zero appears at super y = {}'.format(ys))
+                    
+                    for x in range(Nx):
+                        for y in range(Ny):
+                            xs = pix2sup(x, xscale, origin=0)
+                            ys = pix2sup(y, yscale, origin=0)
+                            self.im[:,y,x] = supcube[:,ys,xs]
+                    
+                elif self.Ndim==2:
+                    Nxs = math.ceil(Nx/xscale)
+                    cube_supx = np.zeros((Ny,Nxs))
+                    frac2 = d_x / xscale
+                    f2 = math.floor(frac2)
+                    frac1 = 1 - frac2
+                    for xs in range(Nxs):
+                        if frac2>=0:
+                            x0 = sup2pix(0, xscale, Npix=Nx, origin=0)
+                        else:
+                            x0 = sup2pix(Nxs-1, xscale, Npix=Nx, origin=0)
+                        if fill=='med':
+                            fill_value = np.nanmedian(self.im,axis=1)
+                        elif fill=='avg':
+                            fill_value = np.nanmean(self.im,axis=1)
+                        elif fill=='near':
+                            fill_value = np.nanmean(self.im[:,x0[0]:x0[-1]+1],axis=1)
+                        else:
+                            fill_value = fill
+                        if frac2>=0:
+                            if xs>=f2:
+                                x1 = sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
+                                cube_supx[:,xs] += (f2+frac1) * np.nanmean(self.im[:,x1[0]:x1[-1]+1],axis=1)
+                                if xs>f2:
+                                    x2 = sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
+                                    cube_supx[:,xs] += (frac2-f2) * np.nanmean(self.im[:,x2[0]:x2[-1]+1],axis=1)
+                                else:
+                                    cube_supx[:,xs] += (frac2-f2) * fill_value
+                            else:
+                                cube_supx[:,xs] += fill_value
+                                # if self.verbose:
+                                #     warnings.warn('Zero appears at super x = {}'.format(xs))
+                        else:
+                            if xs<=Nxs+f2:
+                                x2 = sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
+                                cube_supx[:,xs] += (frac2-f2) * np.nanmean(self.im[:,x2[0]:x2[-1]+1],axis=1)
+                                if xs<Nxs+f2:
+                                    x1 = sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
+                                    cube_supx[:,xs] += (f2+frac1) * np.nanmean(self.im[:,x1[0]:x1[-1]+1],axis=1)
+                                else:
+                                    cube_supx[:,xs] += (f2+frac1) * fill_value
+                            else:
+                                cube_supx[:,xs] += fill_value
+                                # if self.verbose:
+                                #     warnings.warn('Zero appears at super x = {}'.format(xs))
+                    
+                    Nys = math.ceil(Ny/yscale)
+                    supcube = np.zeros((Nys,Nxs))
+                    frac2 = d_y / yscale
+                    f2 = math.floor(frac2)
+                    frac1 = 1 - frac2
+                    for ys in range(Nys):
+                        if frac2>=0:
+                            y0 = sup2pix(0, yscale, Npix=Ny, origin=0)
+                        else:
+                            y0 = sup2pix(Nys-1, yscale, Npix=Ny, origin=0)
+                        if fill=='med':
+                            fill_value = np.nanmedian(cube_supx,axis=0)
+                        elif fill=='avg':
+                            fill_value = np.nanmean(cube_supx,axis=0)
+                        elif fill=='near':
+                            fill_value = np.nanmean(cube_supx[y0[0]:y0[-1]+1,:],axis=0)
+                        else:
+                            fill_value = fill
+                        if frac2>=0:
+                            if ys>=f2:
+                                y1 = sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
+                                supcube[ys,:] += (f2+frac1) * np.nanmean(cube_supx[y1[0]:y1[-1]+1,:],axis=0)
+                                if ys>f2:
+                                    y2 = sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
+                                    supcube[ys,:] += (frac2-f2) * np.nanmean(cube_supx[y2[0]:y2[-1]+1,:],axis=0)
+                                else:
+                                    supcube[ys,:] += (frac2-f2) * fill_value
+                            else:
+                                supcube[ys,:] += fill_value
+                                # if self.verbose:
+                                #     warnings.warn('Zero appears at super y = {}'.format(ys))
+                        else:
+                            if ys<=Nys+f2:
+                                y2 = sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
+                                supcube[ys,:] += (frac2-f2) * np.nanmean(cube_supx[y2[0]:y2[-1]+1,:],axis=0)
+                                if ys<Nys+f2:
+                                    y1 = sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
+                                    supcube[ys,:] += (f2+frac1) * np.nanmean(cube_supx[y1[0]-1:y1[-1],:],axis=0)
+                                else:
+                                    supcube[ys,:] += (f2+frac1) * fill_value
+                            else:
+                                supcube[ys,:] += fill_value
+                                # if self.verbose:
+                                #     warnings.warn('Zero appears at super y = {}'.format(ys))
+                    
+                    for x in range(Nx):
+                        for y in range(Ny):
+                            xs = pix2sup(x, xscale, origin=0)
+                            ys = pix2sup(y, yscale, origin=0)
+                            self.im[y,x] = supcube[ys,xs]
 
+            ## Original NaN mask
+            mask_nan = np.isnan(oldimage)
+            self.im[mask_nan] = np.nan
+            ## Recover new NaN pixels with zeros
+            mask_recover = np.logical_and(np.isnan(self.im), ~mask_nan)
+            self.im[mask_recover] = 0
+            
         return self.im
 
     def slice(self, filSL, postfix='', ext=''):
@@ -450,7 +571,7 @@ class improve:
                 f = filSL+'_'+'0'*(4-len(str(k)))+str(k)+postfix
                 slist.append(f+ext)
                 write_fits(f, self.hdred, self.im[k,:,:]) # gauss_noise inclu
-        else:
+        elif self.Ndim==2:
             f = filSL+'_0000'+postfix
             slist.append(f+ext)
             write_fits(f, self.hdred, self.im) # gauss_noise inclu
@@ -475,7 +596,7 @@ class improve:
                 f = filSL+'_'+'0'*(4-len(str(k)))+str(k)+postfix
                 slist.append(f)
                 write_fits(f, self.hdred, inv_sq[k,:,:]) # gauss_noise inclu
-        else:
+        elif self.Ndim==2:
             f = filSL+'_0000'+postfix
             slist.append(f)
             write_fits(f, self.hdred, inv_sq) # gauss_noise inclu
@@ -679,7 +800,7 @@ class improve:
             image_newx = np.zeros((self.Nw,oldNy,Nx))
             newimage = np.zeros((self.Nw,Ny,Nx))
             nanbox = np.zeros((self.Nw,Ny,Nx))
-        else:
+        elif self.Ndim==2:
             image_newx = np.zeros((oldNy,Nx))
             newimage = np.zeros((Ny,Nx))
             nanbox = np.zeros((Ny,Nx))
@@ -708,14 +829,14 @@ class improve:
                     ## Shrinking case with old pix containing whole new pix (box averaging)
                     if self.Ndim==3:
                         image_newx[:,:,x] = (1.-frac1-frac2) * oldimage[:,:,istart]
-                    else:
+                    elif self.Ndim==2:
                         image_newx[:,x] = (1.-frac1-frac2) * oldimage[:,istart]
                 else:
                     ## Other cases (bilinear interpolation)
                     if self.Ndim==3:
                         edges = frac1*oldimage[:,:,istart] + frac2*oldimage[:,:,istop]
                         image_newx[:,:,x] = np.sum(oldimage[:,:,istart:istop+1],axis=2) - edges
-                    else:
+                    elif self.Ndim==2:
                         edges = frac1*oldimage[:,istart] + frac2*oldimage[:,istop]
                         image_newx[:,x] = np.sum(oldimage[:,istart:istop+1],axis=1) - edges
                         
@@ -739,14 +860,14 @@ class improve:
                     ## Shrinking case with old pix containing whole new pix (box averaging)
                     if self.Ndim==3:
                         newimage[:,y,:] = (1.-frac1-frac2) * image_newx[:,istart,:]
-                    else:
+                    elif self.Ndim==2:
                         newimage[y,:] = (1.-frac1-frac2) * image_newx[istart,:]
                 else:
                     ## Other cases (bilinear interpolation)
                     if self.Ndim==3:
                         edges = frac1*image_newx[:,istart,:] + frac2*image_newx[:,istop,:]
                         newimage[:,y,:] = np.sum(image_newx[:,istart:istop+1,:],axis=1) - edges
-                    else:
+                    elif self.Ndim==2:
                         edges = frac1*image_newx[istart,:] + frac2*image_newx[istop,:]
                         newimage[y,:] = np.sum(image_newx[istart:istop+1,:],axis=0) - edges
 
@@ -821,7 +942,7 @@ class improve:
                                     if ~np.isnan(oldimage[w,istart+j,old1+i]):
                                         newimage[w,y,x] += oldimage[w,istart+j,old1+i] * ybox * xbox
                                         nanbox[w,y,x] += ybox * xbox
-                            else:
+                            elif self.Ndim==2:
                                 if ~np.isnan(oldimage[istart+j,old1+i]):
                                     newimage[y,x] += oldimage[istart+j,old1+i] * ybox * xbox
                                     nanbox[y,x] += ybox * xbox
@@ -857,40 +978,36 @@ class improve:
         Nys = math.ceil(self.Ny/yscale)
         if self.Ndim==3:
             ## Super pixels
-            image_supx = np.zeros((self.Nw,self.Ny,Nxs))
+            image_sup = np.zeros((self.Nw,Nys,Nxs))
             for xs in range(Nxs):
                 xarr = sup2pix(xs, xscale, Npix=self.Nx, origin=0)
-                print('xarr',xarr)
-                image_supx[:,:,xs] += np.nanmean(self.im[:,:,xarr[0]:xarr[-1]+1],axis=2)
-            supimage = np.zeros((self.Nw,Nys,Nxs))
-            for ys in range(Nys):
-                yarr = sup2pix(ys, yscale, Npix=self.Ny, origin=0)
-                print('yarr',yarr)
-                supimage[:,ys,:] += np.nanmean(image_supx[:,yarr[0]:yarr[-1]+1,:],axis=1)
+                for ys in range(Nys):
+                    yarr = sup2pix(ys, yscale, Npix=self.Ny, origin=0)
+                    im = self.im[:,yarr[0]:yarr[-1]+1,xarr[0]:xarr[-1]+1]
+                    image_sup[:,ys,xs] += np.nanmean(im,axis=(1,2))
             ## Grouped pixels
             image_grp = np.zeros((self.Nw,self.Ny,self.Nx))
             for x in range(self.Nx):
                 for y in range(self.Ny):
                     xs = pix2sup(x, xscale, origin=0)
                     ys = pix2sup(y, yscale, origin=0)
-                    image_grp[:,y,x] = supimage[:,ys,xs]
+                    image_grp[:,y,x] = image_sup[:,ys,xs]
         elif self.Ndim==2:
             ## Super pixels
-            image_supx = np.zeros((self.Ny,Nxs))
+            image_sup = np.zeros((Nys,Nxs))
             for xs in range(Nxs):
                 xarr = sup2pix(xs, xscale, Npix=self.Nx, origin=0)
-                image_supx[:,xs] += np.nanmean(self.im[:,xarr[0]:xarr[-1]+1],axis=1)
-            supimage = np.zeros((Nys,Nxs))
-            for ys in range(Nys):
-                yarr = sup2pix(ys, yscale, Npix=self.Ny, origin=0)
-                supimage[ys,:] += np.nanmean(image_supx[yarr[0]:yarr[-1]+1,:],axis=0)
+                for ys in range(Nys):
+                    yarr = sup2pix(ys, yscale, Npix=self.Ny, origin=0)
+                    im = self.im[yarr[0]:yarr[-1]+1,xarr[0]:xarr[-1]+1]
+                    image_sup[ys,xs] += np.nanmean(im)
             ## Grouped pixels
             image_grp = np.zeros((self.Ny,self.Nx))
             for x in range(self.Nx):
                 for y in range(self.Ny):
                     xs = pix2sup(x, xscale, origin=0)
                     ys = pix2sup(y, yscale, origin=0)
-                    image_grp[y,x] = supimage[ys,xs]
+                    image_grp[y,x] = image_sup[ys,xs]
 
         if filOUT is not None:
             write_fits(filOUT, self.hdr, image_grp, self.wvl, self.wmod)
@@ -1270,8 +1387,8 @@ class imontage(improve):
         self.verbose = verbose
         self.devnull = devnull
     
-    def reproject(self, flist, refheader,
-                  filOUT=None, dist=None):
+    def reproject(self, flist, refheader, filOUT=None,
+                  dist=None, sig_pt=0, fill_pt='near') :
         '''
         Reproject 2D image or 3D cube
 
@@ -1282,8 +1399,14 @@ class imontage(improve):
         dist                uncertainty distribution
                               'norm' - N(0,1)
                               'splitnorm' - SN(0,lam,lam*tau)
+        sig_pt              pointing accuracy in arcsec (Default: 0)
+        fill_pt             fill value of no data regions after shift
+                              'med': axis median
+                              'avg': axis average
+                              'near': nearest non-NaN value on the same axis (default)
+                              float: constant
         ------ OUTPUT ------
-        self.images         reprojected images
+        images              reprojected images
         '''
         flist = listize(flist)
         
@@ -1304,6 +1427,7 @@ class imontage(improve):
                 self.rand_norm(f+'_unc')
             elif dist=='splitnorm':
                 self.rand_splitnorm([f+'_unc_N', f+'_unc_P'])
+            self.rand_pointing(sig_pt, fill=fill_pt)
             write_fits(filOUT, self.hdr, self.im, self.wvl, wmod=0)
             
             ## Do reprojection
@@ -1317,22 +1441,22 @@ class imontage(improve):
         
         return images
 
-    def reproject_mc(self, filIN, refheader,
-                     filOUT=None, dist=None, Nmc=0):
+    def reproject_mc(self, filIN, refheader, filOUT=None,
+                     dist=None, sig_pt=0, fill_pt='near', Nmc=0):
         '''
         Generate Monte-Carlo uncertainties for reprojected input file
         '''
-        dataset = type('', (), {})()
+        ds = type('', (), {})()
 
         hyperim = [] # [j,(w,)y,x]
         for j in trange(Nmc+1, leave=False,
                         desc='<imontage> Reprojection [MC]'):
 
             if j==0:
-                im0 = self.reproject(filIN, refheader, filOUT, dist)[0]
+                im0 = self.reproject(filIN, refheader, filOUT)[0]
             else:
-                hyperim.append(self.reproject(filIN, refheader,
-                                              filOUT+'_'+str(j), dist)[0])
+                hyperim.append( self.reproject(filIN, refheader, filOUT+'_'+str(j),
+                                               dist, sig_pt, fill_pt)[0] )
         im0 = np.array(im0)
         hyperim = np.array(hyperim)
         unc = np.nanstd(hyperim, axis=0)
@@ -1342,19 +1466,19 @@ class imontage(improve):
             write_fits(filOUT+'_unc', refheader, unc, self.wvl,
                        COMMENT=comment)
 
-        dataset.im0 = im0
-        dataset.unc = unc
-        dataset.hyperim = hyperim
+        ds.data = im0
+        ds.unc = unc
+        ds.hyperdata = hyperim
 
-        return dataset
+        return ds
 
-    def coadd(self, flist, refheader,
-              filOUT=None, dist=None, Nmc=0):
+    def coadd(self, flist, refheader, filOUT=None,
+              dist=None, sig_pt=0, fill_pt='near', Nmc=0):
         '''
         Reproject and coadd
         '''
         flist = listize(flist)
-        dataset = type('', (), {})()
+        ds = type('', (), {})()
         comment = "Created by <imontage>"
 
         slist = [] # slist[j,if,iw]
@@ -1380,6 +1504,7 @@ class imontage(improve):
                         self.rand_norm(f+'_unc')
                     elif dist=='splitnorm':
                         self.rand_splitnorm([f+'_unc_N', f+'_unc_P'])
+                    self.rand_pointing(sig_pt, fill=fill_pt)
                         
                     sl.append(self.slice(coadd_tmp+'slice',
                                          postfix='_'+str(j), ext=fitsext))
@@ -1418,432 +1543,12 @@ class imontage(improve):
             write_fits(filOUT+'_unc', refheader, unc, self.wvl, wmod=0,
                        COMMENT=comment)
 
-        dataset.wvl = self.wvl
-        dataset.im = im
-        dataset.unc = unc
-        dataset.superim = superim
+        ds.wave = self.wvl
+        ds.data = im
+        ds.unc = unc
+        ds.hyperdata = superim
         
-        return dataset
-
-    def clean(self, filIN=None):
-        if filIN is not None:
-            fclean(filIN)
-        else:
-            fclean(self.path_tmp)
-            
-class imontage_v0_4(improve):
-    '''
-    2D image or 3D cube montage toolkit
-    (Archived reproject v0.4 version)
-
-    ------ INPUT ------
-    flist               FITS file (list, cf improve.filIN)
-    filREF              ref file (priority if co-exist with input header)
-    hdREF               ref header
-    fmod                output image frame mode
-                          'ref' - same as ref frame (Default)
-                          'rec' - recenter back to input frame
-                          'ext' - cover both input and ref frame
-    ext_pix             number of pixels to extend to save edge
-    tmpdir              tmp file path
-    ------ OUTPUT ------
-    '''
-    def __init__(self, flist, filREF=None, hdREF=None,
-                 fmod='ref', ext_pix=0, tmpdir=None):
-        '''
-        self: hdr_ref, path_tmp, 
-        (filIN, wmod, hdr, w, Ndim, Nx, Ny, Nw, im, wvl)
-        '''
-        ## Set path of tmp files
-        if tmpdir is None:
-            path_tmp = os.getcwd()+'/tmp_mtg/'
-        else:
-            path_tmp = tmpdir
-        if not os.path.exists(path_tmp):
-            os.makedirs(path_tmp)
-        self.path_tmp = path_tmp
-
-        ## Inputs
-        self.flist = listize(flist)
-        self.filREF = filREF
-        self.hdREF = hdREF
-        self.fmod = fmod
-        self.ext_pix = ext_pix
-        
-        ## Init ref header
-        self.hdr_ref = None
-
-    def make_header(self, filIN, filREF=None, hdREF=None, fmod='ref', ext_pix=0):
-        '''
-        Header maker
-
-        ------ INPUT ------
-        filIN               single FITS file
-        '''
-        super().__init__(filIN)
-
-        ## Prepare reprojection header
-        if filREF is not None:
-            hdREF = read_fits(filREF).header
-            # hdREF['EQUINOX'] = 2000.0
-
-        if hdREF is not None:
-            ## Frame mode (fmod) options
-            ##---------------------------
-            if fmod=='ref':
-                pass
-            else:
-                ## Input WCS (old)
-                pix_old = [[0, 0]]
-                pix_old.append([0, self.Ny])
-                pix_old.append([self.Nx, 0])
-                pix_old.append([self.Nx, self.Ny])
-                world_arr = self.w.all_pix2world(np.array(pix_old), 1)
-                ## Ref WCS (new)
-                w = fixwcs(header=hdREF).wcs
-                try:
-                    pix_new = w.all_world2pix(world_arr, 1)
-                except wcs.wcs.NoConvergence as e:
-                    pix_new = e.best_solution
-                    print("Best solution:\n{0}".format(e.best_solution))
-                    print("Achieved accuracy:\n{0}".format(e.accuracy))
-                    print("Number of iterations:\n{0}".format(e.niter))
-                xmin = min(pix_new[:,0])
-                xmax = max(pix_new[:,0])
-                ymin = min(pix_new[:,1])
-                ymax = max(pix_new[:,1])
-
-                ## Modify ref header
-                if fmod=='rec': 
-                    hdREF['CRPIX1'] += -xmin
-                    hdREF['CRPIX2'] += -ymin
-                    hdREF['NAXIS1'] = math.ceil(xmax - xmin)
-                    hdREF['NAXIS2'] = math.ceil(ymax - ymin)
-                elif fmod=='ext':
-                    if xmin<0:
-                        hdREF['CRPIX1'] += -xmin
-                    if ymin<0:
-                        hdREF['CRPIX2'] += -ymin
-                    hdREF['NAXIS1'] = math.ceil(max(xmax, hdREF['NAXIS1']-xmin,
-                                                    xmax-xmin, hdREF['NAXIS1'])) + ext_pix # save edges
-                    hdREF['NAXIS2'] = math.ceil(max(ymax, hdREF['NAXIS2']-ymin,
-                                                    ymax-ymin, hdREF['NAXIS2'])) + ext_pix
-            ## Save hdREF
-            self.hdr_ref = hdREF
-
-            ## Test hdREF (Quick check: old=new or old<new)
-            # w_new = fixwcs(header=hdREF).wcs
-            # print('old: ', w.all_world2pix(
-            #     self.hdr['CRVAL1'], self.hdr['CRVAL2'], 1))
-            # print('new: ', w_new.all_world2pix(
-            #     self.hdr['CRVAL1'], self.hdr['CRVAL2'], 1))
-            # exit()
-        else:
-            raise ValueError('Cannot find reprojection reference! ')
-
-    def make(self):
-        '''
-        Preparation (make header)
-        '''
-        flist = self.flist
-        filREF = self.filREF
-        hdREF = self.hdREF
-        fmod = self.fmod
-        ext_pix = self.ext_pix
-
-        # if isinstance(flist, str):
-        #     self.make_header(flist, filREF, hdREF, fmod, ext_pix)
-        # elif isinstance(flist, list):
-        self.make_header(flist[0], filREF, hdREF, fmod, ext_pix)
-        if fmod=='ext':
-            ## Refresh self.hdr_ref in every circle
-            for f in flist:
-                self.make_header(filIN=f, filREF=None,
-                                 hdREF=self.hdr_ref, fmod='ext', ext_pix=ext_pix)
-        
-        tqdm.write('<imontage> Making ref header...[done]')
-
-        return self.hdr_ref
-
-    def footprint(self, filOUT=None):
-        '''
-        Save reprojection footprint
-        '''
-        if filOUT is None:
-            filOUT = self.path_tmp+'footprint'
-        
-        Nx = self.hdr_ref['NAXIS1']
-        Ny = self.hdr_ref['NAXIS2']
-        im_fp = np.ones((Ny, Nx))
-        
-        comment = "<imontage> footprint"
-        write_fits(filOUT, self.hdr_ref, im_fp, COMMENT=comment)
-
-        return im_fp
-
-    def reproject(self, filIN, filOUT=None,
-                  dist=None, postfix=''):
-        '''
-        Reproject 2D image or 3D cube
-
-        ------ INPUT ------
-        filIN               single FITS file to reproject
-        filOUT              output FITS file
-        dist                uncertainty distribution
-                              'norm' - N(0,1)
-                              'splitnorm' - SN(0,lam,lam*tau)
-        postfix              
-        ------ OUTPUT ------
-
-        '''
-        super().__init__(filIN)
-        
-        if dist=='norm':
-            self.rand_norm(filIN+'_unc')
-        elif dist=='splitnorm':
-            self.rand_splitnorm([filIN+'_unc_N', filIN+'_unc_P'])
-        
-        ## Set reprojection tmp path
-        ##---------------------------
-        filename = os.path.basename(filIN)
-        rep_tmp = self.path_tmp+filename+postfix+'/'
-        if not os.path.exists(rep_tmp):
-            os.makedirs(rep_tmp)
-
-        self.slist = self.slice(rep_tmp+'slice', '_') # gauss_noise inclu
-        ## Do reprojection
-        ##-----------------
-        cube_rep = []
-        # for k in range(self.Nw):
-            # hdr = self.hdr.copy()
-            # for kw in self.hdr.keys():
-            #     if '3' in kw:
-            #         del hdr[kw]
-            # hdr['NAXIS'] = 2
-            # phdu = fits.PrimaryHDU(header=hdr, data=self.im[k,:,:])
-            # im_rep = reproject_interp(phdu, self.hdr_ref)[0]
-        for s in self.slist:
-            im_rep = reproject_interp(s+fitsext, self.hdr_ref)[0]
-            cube_rep.append(im_rep)
-            write_fits(s+'rep_', self.hdr_ref, im_rep)
-            fclean(s+fitsext)
-        self.im = np.array(cube_rep)
-
-        comment = "Reprojected by <imontage>. "
-        if filOUT is None:
-            filOUT = self.path_tmp+filename+postfix+'_rep'
-        self.file_rep = filOUT
-
-        write_fits(filOUT, self.hdr_ref, self.im, self.wvl, wmod=0,
-                   COMMENT=comment)
-        
-        return self.im
-
-    def reproject_mc(self, filIN, filOUT=None, Nmc=0, dist=None):
-        '''
-        Generate Monte-Carlo uncertainties for reprojected input file
-        '''
-        dataset = type('', (), {})()
-
-        hyperim = [] # [j,(w,)y,x]
-        for j in trange(Nmc+1, leave=False,
-                        desc='<imontage> Reprojection (MC level)'):
-
-            if j==0:
-                im0 = self.reproject(filIN, filOUT=filOUT, dist=dist)
-                file_rep = self.file_rep
-            else:
-                hyperim.append(self.reproject(filIN, filOUT=filOUT,
-                                              dist=dist, postfix='_'+str(j)))
-        im0 = np.array(im0)
-        hyperim = np.array(hyperim)
-        unc = np.nanstd(hyperim, axis=0)
-        comment = "Created by <imontage>"
-
-        if Nmc>0:
-            write_fits(file_rep+'_unc', self.hdr_ref, unc, self.wvl,
-                       COMMENT=comment)
-
-        dataset.im0 = im0
-        dataset.unc = unc
-        dataset.hyperim = hyperim
-
-        return dataset
-
-    def combine(self, flist, filOUT=None, method='avg',
-                do_rep=True, Nmc=0, dist=None):
-        '''
-        Stitching input files (with the same wavelengths) to the ref WCS
-
-        If Nmc==0, no MC
-        '''
-        flist = listize(flist)
-        dataset = type('', (), {})()
-        wvl = read_fits(flist[0]).wave
-        dataset.wvl = wvl
-
-        superim0 = [] # [i,(w,)y,x]
-        superunc = [] # [i,(w,)y,x]
-        superim = [] # [i,j,(w,)y,x]
-        Nf = np.size(flist)
-        for i in trange(Nf, leave=False,
-                        desc='<imontage> Reprojection (file level)'):
-            ## (Re)do reprojection
-            ##---------------------
-            if do_rep==True:
-                ## With MC
-                if Nmc>0:
-                    rep = self.reproject_mc(flist[i], Nmc=Nmc, dist=dist)
-                    im0 = rep.im0
-                    
-                    superunc.append(rep.unc)
-                    superim.append(rep.hyperim)
-                ## Without MC
-                else:
-                    im0 = self.reproject(flist[i])                    
-                superim0.append(im0)
-
-            ## Read archives
-            ##---------------
-            else:
-                filename = os.path.basename(flist[i])
-                file_rep = self.path_tmp+filename+'_rep'
-                if Nmc>0:
-                    hyperim = [] # [j,(w,)y,x]
-                    for j in range(Nmc+1):
-                        if j==0:
-                            superunc.append(read_fits(file_rep+'_unc').data)
-                        else:
-                            file_rep = self.path_tmp+filename+'_'+str(j)+'_rep'
-                            hyperim.append(read_fits(file_rep).data)
-                    hyperim = np.array(hyperim)
-                    superim.append(hyperim)
-                superim0.append(read_fits(file_rep).data)
-
-        superim0 = np.array(superim0)
-        superunc = np.array(superunc)
-        superim = np.array(superim)
-
-        ## Combine images
-        ##----------------
-        hyperim_comb = []
-        unc_comb = np.nanstd(hyperim_comb)
-        ## Think about using 'try - except'
-        if Nmc>0:
-            inv_var = 1./superunc**2
-            for j in trange(Nmc+1, leave=False,
-                            desc='<imontage> Stitching'):
-                if j==0:
-                    if method=='avg':
-                        im0_comb = nanavg(superim0, axis=0)
-                    elif method=='wgt_avg':
-                        im0_comb = nanavg(superim0, axis=0, weights=inv_var)
-                else:
-                    if method=='avg':
-                        hyperim_comb.append(nanavg(superim[:,j-1], axis=0))
-                    elif method=='wgt_avg':
-                        hyperim_comb.append(
-                            nanavg(superim[:,j-1], axis=0, weights=inv_var))
-            hyperim_comb = np.array(hyperim_comb)
-            unc_comb = np.nanstd(hyperim_comb)
-        else:
-            ## If no unc, inverse variance weighted mean not available
-            im0_comb = nanavg(superim0, axis=0)
-
-        if filOUT is not None:
-            comment = "An <imontage> production"
-
-            write_fits(filOUT, self.hdr_ref, im0_comb, wvl,
-                       COMMENT=comment)
-            write_fits(filOUT+'_unc', self.hdr_ref, unc_comb, wvl,
-                       COMMENT=comment)
-        
-        dataset.im0_comb = im0_comb
-        dataset.unc_comb = unc_comb
-        dataset.hyperim_comb = hyperim_comb
-        dataset.superim0 = superim0
-        dataset.superunc = superunc
-        dataset.superim = superim
-
-        tqdm.write('<imontage> Combining images...[done]')
-        
-        return dataset
-
-    def coadd(self, flist, filOUT=None,
-              Nmc=0, dist=None):
-        '''
-        Same function with combine() using reproject.reproject_and_coadd()
-        '''
-        flist = listize(flist)
-        dataset = type('', (), {})()
-        comment = "Created by <imontage>"
-
-        for j in trange(Nmc+1, leave=False,
-                        desc='<imontage> Coadd [MC]'):
-            sl = []
-            if j==0:
-                for f in flist:
-                    super().__init__(f)
-
-                    filename = os.path.basename(f)
-                    coadd_tmp = self.path_tmp+filename+'/'
-                    if not os.path.exists(coadd_tmp):
-                        os.makedirs(coadd_tmp)
-                    sl.append(self.slice(coadd_tmp+'slice', ext=fitsext))
-                slist = [np.array(sl)]
-            else:
-                for f in flist:
-                    super().__init__(f)
-
-                    filename = os.path.basename(f)
-                    coadd_tmp = self.path_tmp+filename+'/'
-                    if not os.path.exists(coadd_tmp):
-                        os.makedirs(coadd_tmp)
-                    if dist=='norm':
-                        self.rand_norm(f+'_unc')
-                    elif dist=='splitnorm':
-                        self.rand_splitnorm([f+'_unc_N', f+'_unc_P'])
-                
-                    sl.append(self.slice(coadd_tmp+'slice',
-                                            postfix='_'+str(j), ext=fitsext))
-                slist.append(np.array(sl))
-        slist = np.array(slist)
-        
-        if self.Nw is None:
-            Nw = 1
-        else:
-            Nw = self.Nw
-        superim = []
-        for j in trange(Nmc+1, leave=False,
-                        desc='<imontage> Coadd [MC]'):
-            if j==0:
-                im = []
-                for i in range(Nw):
-                    im.append(reproject_and_coadd(slist[j,:,i], self.hdr_ref,
-                                                  reproject_function=reproject_interp)[0])
-                im = np.array(im)
-
-                write_fits(filOUT, self.hdr_ref, im, self.wvl, wmod=0,
-                           COMMENT=comment)
-            else:
-                hyperim = []
-                for i in range(Nw):
-                    hyperim.append(reproject_and_coadd(slist[j,:,i], self.hdr_ref,
-                                                       reproject_function=reproject_interp)[0])
-                superim.append(np.array(hyperim))
-        superim = np.array(superim)
-        unc = np.nanstd(superim, axis=0)
-
-        if Nmc>0:
-            write_fits(filOUT+'_unc', self.hdr_ref, unc, self.wvl, wmod=0,
-                       COMMENT=comment)
-
-        dataset.wvl = self.wvl
-        dataset.im = im
-        dataset.unc = unc
-        dataset.superim = superim
-        
-        return dataset
+        return ds
 
     def clean(self, filIN=None):
         if filIN is not None:
@@ -1952,7 +1657,6 @@ class iswarp(improve):
             ## Run SWarp
             SP.call('swarp '+swarp_opt+image_files,
                     shell=True, cwd=path_tmp, stdout=devnull, stderr=SP.STDOUT)
-            print('Running SWarp...')
 
             self.refheader = read_fits(path_tmp+'coadd.ref').header
             
@@ -2006,21 +1710,26 @@ class iswarp(improve):
 
         return im_fp
 
-    def combine(self, flist, combtype='med',
-                keepedge=False, cropedge=False,
-                dist=None, filOUT=None, tmpdir=None):
+    def combine(self, flist, combtype='med', keepedge=False, cropedge=False,
+                dist=None, sig_pt=0, fill_pt='near', filOUT=None, tmpdir=None):
         '''
-        Combine 
+        SWarp combine (coadding/reprojection)
 
         ------ INPUT ------
         flist               input FITS files should have the same wvl
         combtype            combine type
-                              med - median
-                              avg - average
-                              wgt_avg - inverse variance weighted average
+                              'med' - median (default)
+                              'avg' - average
+                              'wgt_avg' - inverse variance weighted average
         keepedge            default: False
-        cropedge            crop the NaN edge of the frame
+        cropedge            crop the NaN edge of the frame (Default: False)
         dist                add uncertainties (filename+'_unc.fits' needed)
+        sig_pt              pointing accuracy in arcsec (Default: 0)
+        fill_pt             fill value of no data regions after shift
+                              'med': axis median
+                              'avg': axis average
+                              'near': nearest non-NaN value on the same axis (default)
+                              float: constant
         filOUT              output FITS file
         ------ OUTPUT ------
         coadd.head          key for SWarp (inherit self.refheader)
@@ -2072,6 +1781,7 @@ class iswarp(improve):
                 self.rand_norm(flist[i]+'_unc')
             elif dist=='splitnorm':
                 self.rand_splitnorm([flist[i]+'_unc_N', flist[i]+'_unc_P'])
+            self.rand_pointing(sig_pt, fill=fill_pt)
             imlist.append(self.slice(file_slice, ''))
             
             if combtype=='wgt_avg':
@@ -2174,11 +1884,19 @@ class iswarp(improve):
             reframe = improve(header=newheader, image=hyperimage, wave=wvl)
             xlist = []
             for x in range(reframe.Nx):
-                if not np.isnan(reframe.im[:,:,x]).all():
+                if reframe.Ndim==3:
+                    allnan = np.isnan(reframe.im[:,:,x]).all()
+                elif reframe.Ndim==2:
+                    allnan = np.isnan(reframe.im[:,x]).all()
+                if not allnan:
                     xlist.append(x)
             ylist = []
             for y in range(reframe.Ny):
-                if not np.isnan(reframe.im[:,y,:]).all():
+                if reframe.Ndim==3:
+                    allnan = np.isnan(reframe.im[:,y,:]).all()
+                elif reframe.Ndim==2:
+                    allnan = np.isnan(reframe.im[y,:]).all()
+                if not allnan:
                     ylist.append(y)
             xmin = min(xlist)
             xmax = max(xlist)+1
@@ -2193,19 +1911,27 @@ class iswarp(improve):
                          sizpix=(dx,dy), cenpix=(x0,y0))
             newheader = reframe.hdr
             hyperimage = reframe.im
+            cropcenter = (x0,y0)
+            cropsize = (dx,dy)
+        else:
+            cropcenter = None
+            cropsize = None
             
         if filOUT is not None:
             write_fits(filOUT, newheader, hyperimage, wvl)
 
         ds.header = newheader
-        ds.image = hyperimage
-        ds.wvl = wvl
+        ds.data = hyperimage
+        ds.wave = wvl
+        ds.cropcenter = cropcenter
+        ds.cropsize = cropsize
 
         return ds
 
-    def reproject_mc(self, filIN, Nmc=0,
-                     combtype='med', keepedge=False, cropedge=False,
-                     dist=None, filOUT=None, tmpdir=None):
+    def combine_mc(self, filIN, Nmc=0,
+                   combtype='med', keepedge=False, cropedge=False,
+                   dist=None, sig_pt=0, fill_pt='near',
+                   filOUT=None, tmpdir=None):
         '''
         Generate Monte-Carlo uncertainties for reprojected input file
         '''
@@ -2217,26 +1943,25 @@ class iswarp(improve):
 
             if j==0:
                 comb = self.combine(filIN, filOUT=filOUT, tmpdir=tmpdir,
-                                    keepedge=keepedge, cropedge=cropedge,
-                                    combtype=combtype)
-                im0 = comb.image
+                                    combtype=combtype, keepedge=keepedge, cropedge=cropedge)
+                im0 = comb.data
             else:
                 hyperim.append( self.combine(filIN, filOUT=filOUT+'_'+str(j),
-                                             dist=dist, tmpdir=tmpdir,
+                                             tmpdir=tmpdir, combtype=combtype,
                                              keepedge=keepedge, cropedge=cropedge,
-                                             combtype=combtype).image )
+                                             dist=dist, sig_pt=sig_pt, fill_pt=fill_pt).data )
         im0 = np.array(im0)
         hyperim = np.array(hyperim)
         unc = np.nanstd(hyperim, axis=0)
         comment = "Created by <iswarp>"
 
         if Nmc>0:
-            write_fits(filOUT+'_unc', comb.header, unc, comb.wvl,
+            write_fits(filOUT+'_unc', comb.header, unc, comb.wave,
                        COMMENT=comment)
 
-        ds.im0 = im0
+        ds.data = im0
         ds.unc = unc
-        ds.hyperim = hyperim
+        ds.hyperdata = hyperim
 
         return ds
     
@@ -2255,21 +1980,31 @@ class iconvolve(improve):
     filIN               input FITS file
     kfile               convolution kernel(s) (tuple or list)
     klist               CSV file storing kernel names
-    filUNC              unc file (add gaussian noise)
+    dist                uncertainty distribution
+                          'norm' - N(0,1)
+                          'splitnorm' - SN(0,lam,lam*tau)
+    sig_pt              pointing accuracy in arcsec (Default: 0)
+    fill_pt             fill value of no data regions after shift
+                          'med': axis median
+                          'avg': axis average
+                          'near': nearest non-NaN value on the same axis (default)
+                          float: constant
     psf                 PSF list
     convdir             do_conv path (Default: None -> filIN path)
     filOUT              output file
     ------ OUTPUT ------
     '''
     def __init__(self, filIN, kfile, klist,
-                 filUNC=None, dist=None, psf=None, convdir=None, filOUT=None):
+                 dist=None, sig_pt=0, fill_pt='near',
+                 psf=None, convdir=None, filOUT=None):
         ## INPUTS
         super().__init__(filIN)
         
         if dist=='norm':
-            self.rand_norm(filUNC)
+            self.rand_norm(filIN+'_unc')
         elif dist=='splitnorm':
-            self.rand_splitnorm(filUNC)
+            self.rand_splitnorm(filIN+'_unc')
+        self.rand_pointing(sig_pt, fill=fill_pt)
 
         ## Input kernel file in list format
         self.kfile = listize(kfile)
@@ -2388,7 +2123,7 @@ class iconvolve(improve):
             
             self.spitzer_irs()
 
-        else:
+        elif self.Ndim==2:
             f2conv = [self.filIN]
         
         self.choker(f2conv)
@@ -2410,7 +2145,7 @@ class iconvolve(improve):
             # self.hdr = read_fits(self.filIN).header
 
             fclean(f+'_conv'+fitsext)
-        else:
+        elif self.Ndim==2:
             self.convim = read_fits(self.filIN+'_conv').data
 
             fclean(self.filIN+'_conv'+fitsext)
@@ -2479,11 +2214,11 @@ class cupid(improve):
         self.slit = slit
         self.spec = spec
         self.imref = imref
-                        
-    def spec_build(self, filOUT=None, write_unc=False, dist=None,
+        
+    def spec_build(self, filOUT=None, filRAW=None, dist=None,
                    Nx=None, Ny=32, Nsub=1, pixscale=None,
                    wmin=None, wmax=None, tmpdir=None, fiLOG=None,
-                   sig_pt=0, fill='med', supix=False, swarp=False):
+                   sig_pt=0, fill_pt='med', supix=False, swarp=False):
         '''
         Build the spectral cube/slit from spectra extracted by IDL pipeline
         (see IRC_SPEC_TOOL, plot_spec_with_image)
@@ -2499,9 +2234,10 @@ class cupid(improve):
         wmin,wmax           truncate wavelengths
         sig_pt              pointing accuracy in arcsec (Default: 0)
         supix               regrouped super pixel of size (xscale,yscale) (Default: False)
-        fill                fill value of no data regions after shift
+        fill_pt             fill value of no data regions after shift
                               'med': axis median (default)
                               'avg': axis average
+                              'near': nearest non-NaN value on the same axis
                               float: constant
         swarp               use SWarp to perform position shifts
                               Default: False (not support supix)
@@ -2531,6 +2267,7 @@ class cupid(improve):
             ## When we work in N3 frame coordinates, which rotates 90 deg,
             ## if space_shift>0, y decreases.
             ispec = Nsub - 1 - math.floor(j / yscale)
+            # ispec = math.floor(j / yscale) # inverse, see tests/test_build_slit
             readspec = ascii.read(self.path+'spec'+str(ispec)+'.spc')
             subslit = []
             for k in readspec.keys():
@@ -2570,6 +2307,20 @@ class cupid(improve):
         self.reinit(header=self.hdr, image=cube, wave=wave,
                     wmod=self.wmod, verbose=self.verbose)
 
+        if filRAW is not None:
+            comment = "Assembled AKARI/IRC slit spec cube. "
+            write_fits(filRAW, self.hdr, cube, self.wvl,
+                       COMMENT=comment)
+            comment = "Assembled AKARI/IRC slit spec uncertainty cube. "
+            write_fits(filRAW+'_unc', self.hdr, unc, self.wvl,
+                       COMMENT=comment)
+            comment = "Assembled AKARI/IRC slit spec uncertainty (N) cube. "
+            write_fits(filRAW+'_unc_N', self.hdr, unc_N, self.wvl,
+                       COMMENT=comment)
+            comment = "Assembled AKARI/IRC slit spec uncertainty (P) cube. "
+            write_fits(filRAW+'_unc_P', self.hdr, unc_P, self.wvl,
+                       COMMENT=comment)
+
         ## Uncertainty propagation
         if dist=='norm':
             self.rand_norm(unc=unc)
@@ -2582,9 +2333,6 @@ class cupid(improve):
             self.im = np.delete(self.im, [i+1 for i in range(self.Nx-1)], axis=2) # homo x
         ## Broaden slit width
         self.im = np.repeat(self.im, Nx, axis=2)
-        unc = np.repeat(unc, Nx, axis=2)
-        unc_N = np.repeat(unc_N, Nx, axis=2)
-        unc_P = np.repeat(unc_P, Nx, axis=2)
         self.hdr['CRPIX1'] = (Nx+1)/2
         ## Extrapolate discrepancy of rebinned slit length (up to pixscale*Nsub)
         newyscale =  math.ceil(self.Ny/Nsub)
@@ -2608,10 +2356,10 @@ class cupid(improve):
 
         ## Add pointing unc
         if supix:
-            self.rand_pointing(sig_pt, fill=fill, tmpdir=tmpdir,
+            self.rand_pointing(sig_pt, fill=fill_pt, tmpdir=tmpdir,
                                xscale=self.xscale, yscale=self.yscale, swarp=False)
         else:
-            self.rand_pointing(sig_pt, fill=fill, tmpdir=tmpdir,
+            self.rand_pointing(sig_pt, fill=fill_pt, tmpdir=tmpdir,
                                xscale=1, yscale=1, swarp=swarp)
                 
         ## Update self variables (for next steps)
@@ -2619,34 +2367,21 @@ class cupid(improve):
                     wmod=self.wmod, verbose=self.verbose)
 
         if filOUT is not None:
-            comment = "Assembled AKARI/IRC slit spectroscopy cube. "
+            comment = "<cupid> Assembled AKARI/IRC slit spectroscopy cube. "
             write_fits(filOUT, self.hdr, self.im, self.wvl,
                        COMMENT=comment)
-
-            if write_unc==True:
-                uncom = "Assembled AKARI/IRC slit spec uncertainty cube. "
-                write_fits(filOUT+'_unc', self.hdr, unc, self.wvl,
-                           COMMENT=uncom)
-
-                uncom_N = "Assembled AKARI/IRC slit spec uncertainty (N) cube. "
-                write_fits(filOUT+'_unc_N', self.hdr, unc_N, self.wvl,
-                           COMMENT=uncom)
-
-                uncom_P = "Assembled AKARI/IRC slit spec uncertainty (P) cube. "
-                write_fits(filOUT+'_unc_P', self.hdr, unc_P, self.wvl,
-                           COMMENT=uncom)
-
+            
         if fiLOG is not None:
             write_hdf5(fiLOG, 'Observation ID', [self.obsid])
             write_hdf5(fiLOG, 'NIR Slit', [self.slit], append=True)
             write_hdf5(fiLOG, 'Spectral disperser', [self.spec], append=True)
             write_hdf5(fiLOG, 'N3 image',[self.imref], append=True)
-            write_hdf5(fiLOG, 'Pointing accuracy', sig_pt, append=True)
-            write_hdf5(fiLOG, 'Spectral sampling size', self.Nw, append=True)
-            write_hdf5(fiLOG, 'Slit length', self.Ny, append=True)
-            write_hdf5(fiLOG, 'Slit width', self.Nx, append=True)
-            write_hdf5(fiLOG, 'Subslit number', Nsub, append=True)
-            write_hdf5(fiLOG, 'Pixel size', pixscale, append=True)
+            write_hdf5(fiLOG, 'Pointing accuracy', [sig_pt], append=True)
+            write_hdf5(fiLOG, 'Spectral sampling size', [self.Nw], append=True)
+            write_hdf5(fiLOG, 'Slit length', [self.Ny], append=True)
+            write_hdf5(fiLOG, 'Slit width', [self.Nx], append=True)
+            write_hdf5(fiLOG, 'Subslit number', [Nsub], append=True)
+            write_hdf5(fiLOG, 'Pixel size', [pixscale], append=True)
             write_hdf5(fiLOG, 'Super pixel size',
                        [self.xscale, self.yscale], append=True)
         
@@ -3037,7 +2772,7 @@ def hswarp(oldimage, oldheader, refheader,
     if tmpdir is None:
         fclean(path_tmp)
 
-    ds.image = newimage
+    ds.data = newimage
     ds.header = newheader
 
     return ds
@@ -3050,7 +2785,7 @@ def concatenate(flist, filOUT=None, comment=None,
     When wsort=False, wrange is used to avoid wavelength overlapping
 
     '''
-    dataset = type('', (), {})()
+    ds = type('', (), {})()
 
     if wrange is None:
         wrange = [ (2.50, 5.00), # irc
@@ -3072,27 +2807,27 @@ def concatenate(flist, filOUT=None, comment=None,
     if wsort==True:
         for f in flist:
             ds = read_fits(f)
-            data.append(ds.data)
-            wave.append(ds.wave)
+            data.append(fi.data)
+            wave.append(fi.wave)
     ## Keep wavelengths in the given ranges (wrange)
     else:
         for f in flist:
-            ds = read_fits(f)
-            imin = closest(wmin, ds.wave[0])
-            imax = closest(wmax, ds.wave[-1])
+            fi = read_fits(f)
+            imin = closest(wmin, fi.wave[0])
+            imax = closest(wmax, fi.wave[-1])
             iwi = 0
             iws = -1
-            for i, w in enumerate(ds.wave[:-2]):
-                if w<wmin[imin] and ds.wave[i+1]>wmin[imin]:
+            for i, w in enumerate(fi.wave[:-2]):
+                if w<wmin[imin] and fi.wave[i+1]>wmin[imin]:
                     iwi = i+1
-                if w<wmax[imax] and ds.wave[i+1]>wmax[imax]:
+                if w<wmax[imax] and fi.wave[i+1]>wmax[imax]:
                     iws = i+1
-            data.append(ds.data[iwi:iws])
-            wave.append(ds.wave[iwi:iws])
+            data.append(fi.data[iwi:iws])
+            wave.append(fi.wave[iwi:iws])
 
     data = np.concatenate(data, axis=0)
     wave = np.concatenate(wave)
-    hdr = ds.header
+    hdr = fi.header
     ## Sort
     ind = sorted(range(len(wave)), key=wave.__getitem__)
     # wave = np.sort(wave)
@@ -3126,15 +2861,23 @@ def concatenate(flist, filOUT=None, comment=None,
         reframe.crop(sizpix=(dx,dy), cenpix=(x0,y0))
         data = reframe.im
         hdr = reframe.hdr
+        cropcenter = (x0,y0)
+        cropsize = (dx,dy)
+    else:
+        cropcenter = None
+        cropsize = None
 
-    dataset.wave = wave
-    dataset.data = data
+    ds.wave = wave
+    ds.data = data
+    ds.header = hdr
+    ds.cropcenter = cropcenter
+    ds.cropsize = cropsize
     
     ## Write FITS file
     if filOUT is not None:
         write_fits(filOUT, hdr, data, wave, COMMENT=comment)
 
-    return dataset
+    return ds
 
 """
 ------------------------------ MAIN (test) ------------------------------
