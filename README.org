@@ -31,6 +31,12 @@ Anaconda's environment control is recommanded.
 ** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
 ** Contact: dangning.hu@outlook.com
 * Version log
+** v2.0.4 (20211117)
+- [VITAL] Fixed kernel selection ~imaging.iconvolve~ (should be FWHM instead of Gaussian 1-sigma...)
+- ~imaging.improve~
+  + Allowed external wgrid input for ~smooth~
+- Fixed bugs in ~plots~
+  + Set default ~subpos=(0,0)~ (keep current axis)
 ** v2.0.3 (20211008)
 - Updated output name conventions
   + 'type' outputs (e.g. ~ds~): ~header~, ~data~, ~unc~, ~wave~, ~hyperdata~, etc.

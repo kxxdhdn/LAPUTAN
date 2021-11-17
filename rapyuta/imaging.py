@@ -35,7 +35,7 @@ Imaging
         spec_build, sav_build,
         header, image, wave
     wmask, wclean, interfill, hextract, hswarp, 
-    concatenante
+    concatenate
 
 """
 
@@ -149,7 +149,7 @@ class improve:
             ## Nw=1 patch
             if self.im.shape[0]==1:
                 self.Ndim = 2
-                del hdr['NAXIS3']
+                del self.hdr['NAXIS3']
             else:
                 self.hdr['NAXIS3'] = self.Nw
         elif self.Ndim==2:
@@ -1018,34 +1018,51 @@ class improve:
 
         return image_grp
     
-    def smooth(self, smooth=1, wstart=None, filOUT=None):
+    def smooth(self, smooth=1, wgrid=None, wstart=None, filOUT=None):
         '''
         Smooth wavelengths
         If shift, not compatible with unc which needs MC propagation
 
         ------ INPUT ------
         smooth              smooth wavelength grid by linear interpolation (Default: 1)
+        wgrid               external wavelength grid (Default: None)
         wstart              shift wavelength grid to wstart origin (Default: None)
         '''
+        ## Replace wavelength grid
+        if wgrid is not None:
+            wvl = wgrid
+            Nw0 = len(wgrid)
+        else:
+            wvl = self.wvl
+            Nw0 = self.Nw
+            
         ## Wavelength shift (within original w range)
         if wstart is not None:
-            wshift = wstart - self.wvl[0]
+            wshift = wstart - wvl[0]
         else:
             wshift = 0
             
         newave = []
-        for k in range(self.Nw):
+        nan_left = 0
+        nan_right = 0
+        for k in range(Nw0):
             if k%smooth==0:
-                w = self.wvl[k]+wshift
-                if (w>=self.wvl[0] and w<=self.wvl[-1]):
-                    newave.append(w)
+                w = wvl[k]+wshift
+                ## New wgrid should be within the interpolation range (or give NaNs)
+                newave.append(w)
+                if w<self.wvl[0]:
+                    nan_left+=1
+                elif w>self.wvl[-1]:
+                    nan_right+=1
         newave = np.array(newave)
         Nw = len(newave)
         newcube = np.empty([Nw,self.Ny,self.Nx])
         for x in range(self.Nx):
             for y in range(self.Ny):
                 f = interp1d(self.wvl, self.im[:,y,x], kind='linear')
-                newcube[:,y,x] = f(newave)
+                newcube[nan_left:Nw-nan_right,y,x] = f(newave[nan_left:Nw-nan_right])
+                newcube[:nan_left,y,x] = np.nan
+                newcube[Nw-nan_right:,y,x] = np.nan
 
         if filOUT is not None:
             write_fits(filOUT, self.hdr, newcube, newave, self.wmod)
@@ -1326,11 +1343,12 @@ class ismooth(improve):
     SMOOTH wavelengths
     '''
     def __init__(self, filIN, filOUT=None,
-                 smooth=1, wstart=None,
+                 smooth=1, wgrid=None, wstart=None,
                  wmod=0, verbose=False):
         super().__init__(filIN, wmod=wmod, verbose=verbose)
 
-        im_smooth = self.smooth(smooth=smooth, wstart=wstart, filOUT=filOUT)
+        im_smooth = self.smooth(smooth=smooth, filOUT=filOUT,
+                                wgrid=wgrid, wstart=wstart)
 
     def header(self):
         return self.hdr
@@ -1511,18 +1529,19 @@ class imontage(improve):
             slist.append(np.array(sl))
         slist = np.array(slist)
         
-        if self.Nw is None:
-            Nw = 1
-        else:
-            Nw = self.Nw
+        Nw = self.Nw
         superim = []
         for j in trange(Nmc+1, leave=False,
                         desc='<imontage> Coadding... [MC]'):
             if j==0:
                 im = []
-                for iw in range(Nw):
-                    im.append(reproject_and_coadd(slist[j,:,iw], refheader,
-                                                  reproject_function=self.func)[0])
+                if self.Ndim==3:
+                    for iw in range(Nw):
+                        im.append(reproject_and_coadd(slist[j,:,iw], refheader,
+                                                      reproject_function=self.func)[0])
+                elif self.Ndim==2:
+                    im = reproject_and_coadd(slist[j,:,0], refheader,
+                                             reproject_function=self.func)[0]
                 im = np.array(im)
 
                 write_fits(filOUT, refheader, im, self.wvl, wmod=0,
@@ -1920,6 +1939,9 @@ class iswarp(improve):
         if filOUT is not None:
             write_fits(filOUT, newheader, hyperimage, wvl)
 
+        if tmpdir is None:
+            fclean(path_comb)
+
         ds.header = newheader
         ds.data = hyperimage
         ds.wave = wvl
@@ -1989,7 +2011,7 @@ class iconvolve(improve):
                           'avg': axis average
                           'near': nearest non-NaN value on the same axis (default)
                           float: constant
-    psf                 PSF list
+    psf                 list of PSF's FWHM (should be coherent with kfile!!!)
     convdir             do_conv path (Default: None -> filIN path)
     filOUT              output file
     ------ OUTPUT ------
@@ -2014,11 +2036,9 @@ class iconvolve(improve):
         self.path_conv = convdir
         self.filOUT = filOUT
 
-        ## INIT
-        if psf is None:
-            self.psf = [1.,1.5,2.,2.5,3.,3.5,4.,4.5,5.,5.5,6.]
-        else:
-            self.psf = psf
+        ## Init
+        self.psf = psf
+        self.fwhm_lam = None
         self.sigma_lam = None
         
     def spitzer_irs(self):
@@ -2042,7 +2062,7 @@ class iconvolve(improve):
         ## fwhm (arcsec)
         fwhm_par = np.interp(self.wvl, sim_par_wave, sim_par_fwhm)
         fwhm_per = np.interp(self.wvl, sim_per_wave, sim_per_fwhm)
-        #fwhm_lam = np.sqrt(fwhm_par * fwhm_per)
+        self.fwhm_lam = np.sqrt(fwhm_par * fwhm_per)
         
         ## sigma (arcsec)
         sigma_par = fwhm_par / (2. * np.sqrt(2.*np.log(2.)))
@@ -2090,9 +2110,12 @@ class iconvolve(improve):
         kernel = []
         for i, filim in enumerate(flist):
             ## check PSF profil (or is not a cube)
-            if self.sigma_lam is not None:
+            if self.fwhm_lam is not None:
                 image.append(filim)
-                ind = closest(self.psf, self.sigma_lam[i])
+                ind = closest(self.psf, self.fwhm_lam[i])
+                # print('ind = ',ind)
+                # print('psf = ',self.psf[ind])
+                # print('kfile = ',self.kfile[ind])
                 kernel.append(self.kfile[ind])
             else:
                 image.append(flist[0])
@@ -2803,12 +2826,16 @@ def concatenate(flist, filOUT=None, comment=None,
     wave = []
     data = []
 
+    maskall = 0
     ## Keep all wavelengths and sort them in ascending order
     if wsort==True:
         for f in flist:
             ds = read_fits(f)
             data.append(fi.data)
             wave.append(fi.wave)
+            ## If one fragment all NaN, mask
+            maskall = np.logical_or(maskall,
+                                    np.isnan(fi.data).all(axis=0))
     ## Keep wavelengths in the given ranges (wrange)
     else:
         for f in flist:
@@ -2824,6 +2851,9 @@ def concatenate(flist, filOUT=None, comment=None,
                     iws = i+1
             data.append(fi.data[iwi:iws])
             wave.append(fi.wave[iwi:iws])
+            ## If one fragment all NaN, mask
+            maskall = np.logical_or(maskall,
+                                    np.isnan(fi.data).all(axis=0))
 
     data = np.concatenate(data, axis=0)
     wave = np.concatenate(wave)
@@ -2835,9 +2865,8 @@ def concatenate(flist, filOUT=None, comment=None,
     data = data[ind]
     ## NaN mask
     if not keepfrag:
-        ma_any = np.isnan(data).any(axis=0)
         for k in range(len(wave)):
-            data[k][ma_any] = np.nan
+            data[k][maskall] = np.nan
 
     if cropedge:
         reframe = improve(header=hdr, image=data, wave=wave)

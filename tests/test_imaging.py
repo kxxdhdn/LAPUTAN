@@ -125,7 +125,8 @@ print('See out/M83_igroupixel.fits [Done]')
 
 print('\n TEST ismooth ')
 print('--------------')
-smt = ismooth(datdir+'M83', smooth=6, wstart=None,
+newave = read_fits(datdir+'M83').wave[:80] - 0.5
+smt = ismooth(datdir+'M83', smooth=6, wgrid=newave, wstart=None,
               filOUT=outdir+'M83_ismooth')
 print('See out/M83_ismooth.fits [Done]')
 
@@ -198,7 +199,7 @@ psf_ref = 'Gauss_06.0'
 for p in psf:
     irs_ker.append(path_ker+'Kernel_HiRes_Gauss_0'+str(p)+'_to_'+psf_ref)
 conv_cube = iconvolve(datdir+'M82_04_SL1',
-                      kfile=irs_ker, klist=csv_ker,
+                      psf=psf, kfile=irs_ker, klist=csv_ker,
                       dist='norm', sig_pt=.2,
                       convdir=convdir, filOUT=outdir+'M82_04_SL1'+'_conv')
 conv_cube.do_conv(path_idl, verbose=False)

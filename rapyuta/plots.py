@@ -368,7 +368,7 @@ class plotool:
         else:
             self.clib = clib
         
-    def set_ax(self, subpos=(1,1), # ax = axes[subpos[0]-1,subpos[1]-1]
+    def set_ax(self, subpos=(0,0), # ax = axes[subpos[0]-1,subpos[1]-1]
                xlog=False, ylog=False, # ax.set_xscale
                basex=10, basey=10, nonposx='clip', nonposy='clip', # ax.set_xscale
                xlim=(None,None), ylim=(None,None), #ax.set_xlim
@@ -380,7 +380,9 @@ class plotool:
         nonposx, nonposy: 'sym', 'mask', 'clip'
         '''
         if self.nrows!=1 or self.ncols!=1:
-            self.ax = self.axes[subpos[0]-1,subpos[1]-1]
+            if subpos[0]!=0 and subpos[1]!=0:
+                self.ax = self.axes[subpos[0]-1,subpos[1]-1]
+            ## else: keep current self.ax
 
         if xlog:
             if nonposx=='sym':
@@ -413,7 +415,7 @@ class plotool:
         if title is not None:
             self.ax.set_title(title,size=tfsize)
         
-    def set_legend(self, subpos=(1,1), shrinkx=1., shrinky=1.,
+    def set_legend(self, subpos=(0,0), shrinkx=1., shrinky=1.,
                    figtight=False, **kwargs):
         '''
         - bbox_to_anchor rules: (1,1) correspond to upper right of the axis
@@ -437,7 +439,9 @@ class plotool:
             self.fig.legend(**kwargs)
         else:
             if self.nrows!=1 or self.ncols!=1:
-                self.ax = self.axes[subpos[0]-1,subpos[1]-1]
+                if subpos[0]!=0 and subpos[1]!=0:
+                    self.ax = self.axes[subpos[0]-1,subpos[1]-1]
+                ## else: keep current self.ax
             
             # shrink current axis
             box = self.ax.get_position()
@@ -452,14 +456,16 @@ class plotool:
     def plot(self, x=None, y=None, xerr=None, yerr=None,
              fmt='', capsize=None, barsabove=False, # errorbar kw
              ecolor=None, ec=None, elinewidth=None, elw=None, # errorbar kw
-             subpos=(1,1), xisln=False, yisln=False, mod='CA', **kwargs):
+             subpos=(0,0), xisln=False, yisln=False, mod='CA', **kwargs):
         '''
         Like set_ax(), this is a clump operation.
         The idea is to all set in one command,
         while each single operation should also be valid.
         '''
         if self.nrows!=1 or self.ncols!=1:
-            self.ax = self.axes[subpos[0]-1,subpos[1]-1]
+            if subpos[0]!=0 and subpos[1]!=0:
+                self.ax = self.axes[subpos[0]-1,subpos[1]-1]
+            ## else: keep current self.ax
 
         ## kw aliases
         ec = merge_aliases(None, ecolor=ecolor, ec=ec)
@@ -480,14 +486,14 @@ class plotool:
             if x is not None: xp = np.exp(x)
             if xerr is not None: xperr = x * (1. - np.exp(-xerr)) ## suppose xmin <-> lnxmin
         else:
-            if x is not None: xp = x.copy()
-            if xerr is not None: xperr = xerr.copy()
+            if x is not None: xp = x
+            if xerr is not None: xperr = xerr
         if (yisln):
             if y is not None: yp = np.exp(y)
             if yerr is not None: yperr = y * (1. - np.exp(-yerr))
         else:
-            if y is not None: yp = y.copy()
-            if yerr is not None: yperr = yerr.copy()
+            if y is not None: yp = y
+            if yerr is not None: yperr = yerr
             
         ## CA: Cartesian using matplotlib.pyplot.errorbar
         if mod=='CA':
@@ -518,7 +524,7 @@ class plotool:
               efill=False, efillcolor=None, ehatch=None,
               errinlegend=None,
               ## Other kw
-              subpos=(1,1), alpha=1, **kwargs):
+              subpos=(0,0), alpha=1, **kwargs):
         '''
         DISPLAY ERROR BARS/ELLIPSES/SUES
         
@@ -534,7 +540,9 @@ class plotool:
 
         '''
         if self.nrows!=1 or self.ncols!=1:
-            self.ax = self.axes[subpos[0]-1,subpos[1]-1]
+            if subpos[0]!=0 and subpos[1]!=0:
+                self.ax = self.axes[subpos[0]-1,subpos[1]-1]
+            ## else: keep current self.ax
             
         ## kw aliases
         ec = merge_aliases(None, ecolor=ecolor, ec=ec)
