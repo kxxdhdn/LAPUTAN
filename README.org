@@ -14,23 +14,36 @@ Laputan is an inhabitant of a flying island in Swift's Gulliver's Travels charac
 * Helpdesk
 ** Installation
 #+BEGIN_SRC bash
-## Install 
-pip install rapyuta
-
-## Update
+## Install/Update
 pip install rapyuta --upgrade
 
 ## Uninstall
 pip uninstall rapyuta
 #+END_SRC
-Anaconda's environment control is recommanded.
-** In order to access the full functionality, you will need the following extra dependencies:
+** Dependencies
+In order to access the full functionality, you will need the following extra dependencies:
 - [[https://github.com/kxxdhdn/laputan/tree/main/idl][IDL]]
 - [[https://www.astromatic.net/software/swarp][SWarp]]
 - [[https://github.com/kxxdhdn/laputan/tree/main/swing][SwING]]
-** For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
-** Contact: dangning.hu@outlook.com
+** User manual
+For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
+** Contact
+dangning.hu@outlook.com
 * Version log
+** v2.1 (20211202)
+- ~plots.plotool~
+  + Merged ~figure~ to ~__init__~ (using ~squeeze~ kw to get ~self.axes~)
+  + 0-indexed ~subpos~
+  + Supported transformation between coordinate systems with ~self.trans~ kw
+  + Supported multi-legends by adding ~reset_handles~, ~append_handles~, and ~get_handles~
+  + Defined default tick settings in ~set_ax~
+  + Clarified ~**kwargs~ usage in each function
+  + Other kw changes
+- ~plots.pplot~
+  + Adapted to higher level class changes
+  + Defined default uni-plot settings
+- Updated tests
+- Not compatible with scripts using former version ~plots.plotool~ class
 ** v2.0.4 (20211117)
 - [VITAL] Fixed kernel selection ~imaging.iconvolve~ (should be FWHM instead of Gaussian 1-sigma...)
 - ~imaging.improve~
@@ -72,7 +85,7 @@ Anaconda's environment control is recommanded.
   + ~plots~: ~plotrange~, ~Btau~, ~Ctau~, ~ellipse~ and ~SUE~
   + ~plots.plotool~: ~eplot~
 - ~plots.plotool~
-  + Fixed the bug when any of ~nrows~ or ~ncols~ equals to 1, self.axes is 1D so self.ax cannot be attributed
+  + Fixed the bug when any of ~nrows~ or ~ncols~ equals to 1, ~self.axes~ is 1D so ~self.ax~ cannot be attributed
   + Added ~xisln~ and ~yisln~ kw for ~plot~
   + Added ~close~
 - ~plots.pplot~

@@ -7,20 +7,27 @@ Plots
 
     plotrange, Btau, Ctau, ellipse, SUE
     plotool:
-        figure, set_figure, set_clib, set_ax, set_legend, 
+        set_clib, set_fig, set_ax, 
+        reset_handles, append_handles, get_handles, set_legend, 
         plot, eplot, save, show, close
     pplot(plotool):
-        add_plot
+        add_plot, add_legend
 
 """
 
+import warnings
 from astropy import units as u
 import numpy as np
 from scipy import optimize
 # import matplotlib as mpl
+from matplotlib.ticker import (
+    NullFormatter, ScalarFormatter, LogFormatter,
+    LogFormatterExponent, LogFormatterSciNotation,
+    PercentFormatter
+)
 import matplotlib.colors as mplc
 import matplotlib.pyplot as plt
-import warnings
+import matplotlib.patches as mpatches
 
 ## Local
 from utilities import InputError, merge_aliases
@@ -28,8 +35,6 @@ from arrays import arrayize, ramp
 
 # cmap = mpl.cm.viridis
 # norm = mpl.colors.Normalize(vmin=0, vmax=1)
-sizeXS, sizeS, sizeM = 4, 6, 8
-sizeL, sizeXL, sizeXXL = 10, 12, 14
 
 
 ##------------------------------
@@ -317,44 +322,55 @@ def SUE(xmean=None,ymean=None,xstdev=None,ystdev=None,rho=None, \
 class plotool:
     '''
     plot Tool
+
+    ------ INPUT ------
+    nrows,ncols         Default: 1,1
+    figint              Interactive figure (Default: True)
+
+    plt.subplots(**kwargs)
     '''
-    def __init__(self, x=np.zeros(2), y=np.zeros(2)):
-        
+    def __init__(self, nrows=1, ncols=1,
+                 x=np.zeros(2), y=np.zeros(2), figint=True, **kwargs):
+        '''
+        ------ self ------
+        figid               ID number of current figure (Default: 0)
+        horder              ID number of current handle in self.handles (Default: 0)
+        handles             Current handle list (Default: [])
+        labels              Current label list (Default: [])
+        legend              Current legend (Default: None)
+        trans               transformation of coordinate system
+                              'Data'
+                              'Axes' (default)
+                              'Figure'
+                              'Display'
+        '''
         ## INPUTS
-        self.figid = 1
+        self.figid = 0
+        self.horder = 0
+        self.handles = []
+        self.labels = []
+        self.legend = None
+        self.trans = 'Axes'
         self.x = x
         self.y = y
 
-    def figure(self, figsize=None, figint=True,
-               nrows=1, ncols=1):
-        
         if figint:
             plt.ion()
 
         self.nrows = nrows
         self.ncols = ncols
 
-        self.fig, self.axes = plt.subplots(nrows, ncols,
-            figsize=figsize, num=self.figid)
-        if nrows==1 and ncols==1:
-            self.axes = np.array(self.axes)[np.newaxis,np.newaxis]
-        elif nrows==1:
-            self.axes = self.axes[np.newaxis,:]
-        elif ncols==1:
-            self.axes = self.axes[:,np.newaxis]
+        self.fig, self.axes = plt.subplots(nrows, ncols, squeeze=False,
+                                           num=self.figid, **kwargs)
+        ## De-squeeze/Inflate (if squeeze=True)
+        # if nrows==1 and ncols==1:
+        #     self.axes = np.array(self.axes)[np.newaxis,np.newaxis]
+        # elif nrows==1:
+        #     self.axes = self.axes[np.newaxis,:]
+        # elif ncols==1:
+        #     self.axes = self.axes[:,np.newaxis]
 
         self.ax = self.axes[0,0]
-
-    def set_fig(self, left=None, right=None,
-                bottom=None, top=None,
-                wspace=None, hspace=None,
-                title=None, tfsize=20):
-
-        self.fig.subplots_adjust(left=left, right=right,
-            bottom=bottom, top=top, wspace=wspace, hspace=hspace)
-        
-        if title is not None:
-            self.fig.suptitle(title,size=tfsize)
 
     def set_clib(self, clib):
         if clib=='base':
@@ -368,21 +384,50 @@ class plotool:
         else:
             self.clib = clib
         
-    def set_ax(self, subpos=(0,0), # ax = axes[subpos[0]-1,subpos[1]-1]
+    def set_fig(self, left=None, right=None, bottom=None, top=None,
+                wspace=None, hspace=None, title=None, tsize=None):
+
+        self.fig.subplots_adjust(left=left, right=right,
+            bottom=bottom, top=top, wspace=wspace, hspace=hspace)
+        
+        if title is not None:
+            self.fig.suptitle(title, size=tsize)
+        
+    def set_ax(self, subpos=None, # ax = axes[subpos[0],subpos[1]]
                xlog=False, ylog=False, # ax.set_xscale
                basex=10, basey=10, nonposx='clip', nonposy='clip', # ax.set_xscale
                xlim=(None,None), ylim=(None,None), #ax.set_xlim
-               xtickfsize=10, ytickfsize=10, # ax.xaxis.set_tick_params(labelsize=)
-               xlabel=None, ylabel=None, xfsize=10, yfsize=10, # ax.set_xlabel
-               title=None, tfsize=10, # ax.set_title (subplot title)
-               ):
+               xtk=None, xtkmi=None, xtkform=None, xtksize=None, # ax.xaxis.set_tick_params
+               ytk=None, ytkmi=None, ytkform=None, ytksize=None, 
+               xlabel=None, xsize=None, ylabel=None, ysize=None, # ax.set_xlabel
+               xtktoggle=False, ytktoggle=False,
+               title=None, tsize=None, # ax.set_title (subplot title)
+               **kwargs):
         '''
         nonposx, nonposy: 'sym', 'mask', 'clip'
+
+        ------ INPUT ------
+        subpos              identify subplot (Default: None - current self.ax)
+        xtk,ytk             list of major tick labels
+        xtkmi,ytkmi         list of minor tick labels
+        xtkform,ytkform     formatter of (major) tick labels
+        xtksize,ytksize     size of (major) tick labels
+        xsize,ysize         size of axes labels
+        xtktoggle           toggle x tick and label to top
+        ytktoggle           toggle y tick and label to right
+
+        self.ax.tick_params(**kwargs):
+        axis                {'x', 'y', 'both' (default)}
+        reset               Default: False
+        which               {'major' (dafault), 'minor', 'both'}
+        direction           {'in', 'out' (default), 'inout'}
+        length              tick length
+        width               tick width
         '''
         if self.nrows!=1 or self.ncols!=1:
-            if subpos[0]!=0 and subpos[1]!=0:
-                self.ax = self.axes[subpos[0]-1,subpos[1]-1]
-            ## else: keep current self.ax
+            if subpos is not None:
+                self.ax = self.axes[subpos[0],subpos[1]]
+            ## else: keep current self.ax (Default: (0,0))
 
         if xlog:
             if nonposx=='sym':
@@ -400,74 +445,203 @@ class plotool:
         if ylim[0]!=None or ylim[1]!=None:
             self.ax.set_ylim(ylim[0], ylim[1])
 
-        # self.ax.set_xticks()
-        # self.ax.set_yticks()
-        # self.ax.set_xticklabels()
-        # self.ax.set_yticklabels()
-
-        self.ax.xaxis.set_tick_params(labelsize=xtickfsize)
-        self.ax.yaxis.set_tick_params(labelsize=ytickfsize)
+        ## x ticks
+        if xtkform=='log':
+            xformat = LogFormatter()
+        elif xtkform=='log_exp':
+            xformat = LogFormatterExponent()
+        elif xtkform=='log_sci':
+            xformat = LogFormatterSciNotation()
+        elif xtkform=='pct':
+            xformat = PercentFormatter()
+        else:
+            xformat = ScalarFormatter()
+        if xtk is not None:
+            self.ax.set_xticks(xtk, minor=False) # major
+        if xtkmi is not None:
+            self.ax.set_xticks(xtkmi, minor=True) # minor
+        self.ax.xaxis.set_major_formatter(xformat) # major
+        self.ax.xaxis.set_minor_formatter(NullFormatter()) # minor
+        self.ax.xaxis.set_tick_params(labelsize=xtksize)
+        if xtktoggle:
+            self.ax.xaxis.tick_top()
+            self.ax.xaxis.set_label_position('top')
+        ## y ticks
+        if ytkform=='log':
+            yformat = LogFormatter()
+        elif ytkform=='log_exp':
+            yformat = LogFormatterExponent()
+        elif ytkform=='log_sci':
+            yformat = LogFormatterSciNotation()
+        elif ytkform=='pct':
+            yformat = PercentFormatter()
+        else:
+            yformat = ScalarFormatter()
+        if ytk is not None:
+            self.ax.set_yticks(ytk, minor=False) # major
+        if ytkmi is not None:
+            self.ax.set_yticks(ytkmi, minor=True) # minor
+        self.ax.yaxis.set_major_formatter(yformat) # major
+        self.ax.yaxis.set_minor_formatter(NullFormatter()) # minor
+        self.ax.yaxis.set_tick_params(labelsize=ytksize)
+        if ytktoggle:
+            self.ax.yaxis.tick_right()
+            self.ax.yaxis.set_label_position('right')
+        ## both ticks
+        self.ax.tick_params(**kwargs)
         
         if xlabel is not None:
-            self.ax.set_xlabel(xlabel,size=xfsize)
+            self.ax.set_xlabel(xlabel, size=xsize)
         if ylabel is not None:
-            self.ax.set_ylabel(ylabel,size=yfsize)
+            self.ax.set_ylabel(ylabel, size=ysize)
         if title is not None:
-            self.ax.set_title(title,size=tfsize)
+            self.ax.set_title(title, size=tsize)
+
+    def reset_handles(self):
+        '''
+        Reset handles (before plot with new legend)
+        '''
+        if self.trans=='Figure':
+            self.fig.add_artist(self.legend)
+        elif self.trans=='Axes' or self.trans=='Data':
+            self.ax.add_artist(self.legend)
+        self.handles = []
+        self.horder = 0
+
+        return self.handles
+
+    def append_handles(self):
+        '''
+        Append currently added handle (after plot)
+        '''
+        handles, labels = self.ax.get_legend_handles_labels()
+        for handle, label in zip(handles, labels):
+            if label not in self.labels:
+                self.handles.append(handle)
+                self.labels.append(label)
+                self.horder += 1
+
+        return self.handles
         
-    def set_legend(self, subpos=(0,0), shrinkx=1., shrinky=1.,
-                   figtight=False, **kwargs):
+    def get_handles(self):
+        '''
+        Get non-repeated handles (after plot)
+        '''
+        handles, labels = self.ax.get_legend_handles_labels()
+        handlist, labelist = [], []
+        for handle, label in zip(handles, labels):
+            if label not in labelist:
+                handlist.append(handle)
+                labelist.append(label)
+        self.horder = len(handlist)
+        self.handles = handlist
+        self.labels = labelist
+
+        return self.handles
+        
+    def set_legend(self, subpos=None,
+                   left=None, right=None, bottom=None, top=None, figtight=False,
+                   handles=None, **kwargs):
         '''
         - bbox_to_anchor rules: (1,1) correspond to upper right of the axis
-                 bbox_to_anchor = (1,1)
-        .--------.
-        |        |
-        |  axis  |
-        |        |
-        .--------.
-        
-        - lengend loc is relative to the bbox_to_anchor as follows:
-                           |
-        lower right        |       lower left
-        ------------bbox_to_anchor-----------
-        upper right        |       upper left
-                           |
-        '''
-        if subpos is None:
-            self.fig.subplots_adjust(right=shrinkx, top=shrinky)
-            
-            self.fig.legend(**kwargs)
-        else:
-            if self.nrows!=1 or self.ncols!=1:
-                if subpos[0]!=0 and subpos[1]!=0:
-                    self.ax = self.axes[subpos[0]-1,subpos[1]-1]
-                ## else: keep current self.ax
-            
-            # shrink current axis
-            box = self.ax.get_position()
-            self.ax.set_position([box.x0, box.y0, box.width*shrinkx, box.height*shrinky])
 
-            self.ax.legend(**kwargs)
+                    bbox_to_anchor = (1,1)
+          .--------.
+          |        |
+          |  Axes  |
+          | (bbox) |
+          |        |
+          .--------.
+        
+        - lengend loc is relative to the reference point (bbox_to_anchor) as follows:
+
+                               |
+          lower right (2)      |       lower left (1)
+          ---------------bbox_to_anchor---------------
+          upper right (3)      |       upper left (4)
+                               |
+        
+        ------ INPUT ------
+        subpos              identify subplot (Default: None - current self.ax)
+        x0,y0               bottom left of current Axes (Default: None)
+        shrinkx,shrinky     current Axes size (Default: 1)
+        figtight            ignore Axes settings (Default: False)
+        handles             Default: None - self.handles
+
+        self.fig/ax.legend(**kwargs):
+        title               title of legend box
+        loc                 relative position of legend box
+        bbox_to_anchor      reference point of legend box
+        bbox_transform      reference frame of coordinates
+                              self.fig.transFigure
+                              self.ax.transAxes (default)
+        ------ OUTPUT ------
+        self.legend         registrated with self.fig/ax.add_artist(self.legend)
+        '''
+        if handles is None:
+            handles = self.handles
+
+        if self.trans=='Figure':
+            self.fig.subplots_adjust(left=left, right=right,
+                                     bottom=bottom, top=top)
+            
+            self.legend = self.fig.legend(handles=handles, **kwargs)
+        elif self.trans=='Axes' or self.trans=='Data':
+            if self.nrows!=1 or self.ncols!=1:
+                if subpos is not None:
+                    self.ax = self.axes[subpos[0],subpos[1]]
+                ## else: keep current self.ax (Default: (0,0))
+            
+            ## Set current axes
+            bbox = self.ax.get_position()
+            if left is None:
+                x0 = bbox.x0
+            else:
+                x0 = bbox.x0 + left*(bbox.x1-bbox.x0)
+            if right is None:
+                x1 = bbox.x1
+            else:
+                x1 = bbox.x0 + right*(bbox.x1-bbox.x0)
+            if bottom is None:
+                y0 = bbox.y0
+            else:
+                y0 = bbox.y0 + bottom*(bbox.y1-bbox.y0)
+            if top is None:
+                y1 = bbox.y1
+            else:
+                y1 = bbox.y0 + top*(bbox.y1-bbox.y0)
+            self.ax.set_position([x0, y0, x1-x0, y1-y0])
+
+            self.legend = self.ax.legend(handles=handles, **kwargs)
+        else:
+            raise InputError('<plotool.set_legend>',
+                             'Non-recognized transformation!')
 
         if figtight:
             self.fig.tight_layout()
 
+        return self.legend
         
-    def plot(self, x=None, y=None, xerr=None, yerr=None,
+    def plot(self, x=None, y=None, yerr=None, xerr=None, xisln=False, yisln=False,
              fmt='', capsize=None, barsabove=False, # errorbar kw
              ecolor=None, ec=None, elinewidth=None, elw=None, # errorbar kw
-             subpos=(0,0), xisln=False, yisln=False, mod='CA', **kwargs):
+             subpos=None, mod='CA', **kwargs):
         '''
         Like set_ax(), this is a clump operation.
         The idea is to all set in one command,
         while each single operation should also be valid.
+
+        ------ INPUT ------
+        subpos              identify subplot (Default: None - current self.ax)
+
+        self.ax.errorbar(**kwargs)
         '''
         if self.nrows!=1 or self.ncols!=1:
-            if subpos[0]!=0 and subpos[1]!=0:
-                self.ax = self.axes[subpos[0]-1,subpos[1]-1]
-            ## else: keep current self.ax
+            if subpos is not None:
+                self.ax = self.axes[subpos[0],subpos[1]]
+            ## else: keep current self.ax (Default: (0,0))
 
-        ## kw aliases
+        ## Keyword aliases
         ec = merge_aliases(None, ecolor=ecolor, ec=ec)
         elw = merge_aliases(None, elinewidth=elinewidth, elw=elw)
         
@@ -480,7 +654,7 @@ class plotool:
         else:
             self.y = y
 
-        ## log inputs
+        ## Log inputs
         xp, xperr, yp, yperr = None, None, None, None
         if (xisln):
             if x is not None: xp = np.exp(x)
@@ -494,7 +668,7 @@ class plotool:
         else:
             if y is not None: yp = y
             if yerr is not None: yperr = yerr
-            
+
         ## CA: Cartesian using matplotlib.pyplot.errorbar
         if mod=='CA':
                 
@@ -503,7 +677,7 @@ class plotool:
                 fmt=fmt, ecolor=ec, elinewidth=elw,
                 capsize=capsize, barsabove=barsabove,
                 **kwargs)
-        
+            
         else:
             print('*******************')
             print('Prochainement...')
@@ -513,18 +687,19 @@ class plotool:
             print('SP: spherical')
             print('*******************')
 
-    def eplot(self, x, y, mask=None, xmin=None, xmax=None,
-              ymin=None, ymax=None, xisln=False, yisln=False,
+    def eplot(self, x=None, y=None, mask=None,
+              xmin=None, xmax=None, ymin=None, ymax=None,
+              xisln=False, yisln=False,
               ## Uncertainty kw
               sigmax=None, sigmay=None, rho=None,
               gammax=None, gammay=None,
               ## Bar/ellipse keywords
-              ecolor=None, ec=None, elinewidth=None, elw=None,
-              elinestyle=None, els=None,
-              efill=False, efillcolor=None, ehatch=None,
-              errinlegend=None,
+              edgecolor=None, ecolor=None, ec=None,
+              elinewidth=None, elw=None, elinestyle=None, els=None,
+              efillcolor=None, efc=None, efill=False, ehatch=None,
+              errinlegend=None, alpha=1,
               ## Other kw
-              subpos=(0,0), alpha=1, **kwargs):
+              subpos=None, **kwargs):
         '''
         DISPLAY ERROR BARS/ELLIPSES/SUES
         
@@ -538,16 +713,21 @@ class plotool:
         ellipse" or SUE (1 sigma contour of a bivariate split-normal 
         distribution) is drawn. 
 
+        ------ INPUT ------
+        subpos              identify subplot (Default: None - current self.ax)
+
+        self.plot(**kwargs)
         '''
         if self.nrows!=1 or self.ncols!=1:
-            if subpos[0]!=0 and subpos[1]!=0:
-                self.ax = self.axes[subpos[0]-1,subpos[1]-1]
-            ## else: keep current self.ax
+            if subpos is not None:
+                self.ax = self.axes[subpos[0],subpos[1]]
+            ## else: keep current self.ax (Default: (0,0))
             
         ## kw aliases
-        ec = merge_aliases(None, ecolor=ecolor, ec=ec)
+        ec = merge_aliases(None, edgecolor=edgecolor, ecolor=ecolor, ec=ec)
         elw = merge_aliases(None, elinewidth=elinewidth, elw=elw)
         els = merge_aliases(None, elinestyle=elinestyle, els=els)
+        efc = merge_aliases(None, efillcolor=efillcolor, efc=efc)
         
         ## Central values
         xp, N = arrayize(x)
@@ -639,12 +819,12 @@ class plotool:
             efill = arrayize(efill,N=N)
             if ec is None:
                 ec = np.array(['b' for i in range(N)])
-                efillcolor = np.array(['lightblue' for i in range(N)])
+                efc = np.array(['lightblue' for i in range(N)])
             else:
                 ec = arrayize(ec,N=N)
-                efillcolor = arrayize(efillcolor,N=N)
+                efc = arrayize(efc,N=N)
             ec = ec[mask]
-            efillcolor = efillcolor[mask]
+            efc = efc[mask]
 
             ## Hatching the ellipses
             if (ehatch):
@@ -669,12 +849,12 @@ class plotool:
                                          xstdev=xerr[i],ystdev=yerr[i],
                                          rho=rho[i],xmin=xmin,xmax=xmax,
                                          ymin=ymin,ymax=ymax,xisln=xisln,yisln=yisln)
+                    self.plot(xell, yell,
+                              color=ec[i], linewidth=elw[i], linestyle=els[i],
+                              label=elegend, alpha=alpha, **kwargs)
                     if (efill[i]):
                         self.ax.fill(xell,yell,hatch=ehatch[i],fill=nothatched[i],
-                                     color=efillcolor[i],alpha=alpha)
-                    self.ax.plot(xell, yell,
-                                 color=ec[i], linewidth=elw[i], linestyle=els[i],
-                                 label=elegend,alpha=alpha,**kwargs)
+                                     color=efc[i],alpha=alpha)
 
             elif(skewll):
 
@@ -692,16 +872,20 @@ class plotool:
                               xisln=xisln,yisln=yisln)
                     xcen[i] = x0
                     ycen[i] = y0
+                    self.plot(xell, yell,
+                              color=ec[i], linewidth=elw[i], linestyle=els[i],
+                              label=elegend, alpha=alpha, **kwargs)
                     if (efill[i]):
                         self.ax.fill(xell,yell,hatch=ehatch[i],fill=nothatched[i],
-                                     color=efillcolor[i],alpha=alpha)
-                    self.ax.plot(xell, yell,
-                                 color=ec[i], linewidth=elw[i], linestyle=els[i],
-                                 label=elegend,alpha=alpha,**kwargs)
-
+                                     color=efc[i],alpha=alpha)
+            
     def save(self, savename=None, transparent=False,
              figtight=False, close=True, **kwargs):
+        '''
 
+        ------ INPUT ------
+        self.fig.savefig(**kwargs)
+        '''
         ## Use self.fig.set_size_inches to define ranges
         if figtight:
             bbox = 'tight'
@@ -728,117 +912,158 @@ class plotool:
 class pplot(plotool):
     '''
     Uni-frame plot (1 row * 1 col)
+
+    ------ INPUT ------
+    plotool.plot(**kwargs)
     '''
     def __init__(self, x=None, y=None, yerr=None, xerr=None,
+                 figsize=(8,6), figint=False,
                  ## errorbar kw
                  fmt='', capsize=None, barsabove=False,
-                 ecolor=None, ec=None, elinewidth=None, elw=None,
-                 elinestyle=None, els=None,
                  ## eplot kw
+                 edgecolor='grey', ecolor='grey', ec='grey',
+                 elinewidth=None, elw=None, elinestyle=None, els=None,
                  mask=None, xmin=None, xmax=None, ymin=None, ymax=None,
                  sigmax=None, sigmay=None, rho=None,
                  gammax=None, gammay=None,xisln=False, yisln=False,
-                 efill=None, efillcolor=None, ehatch=None,
+                 efillcolor=None, efc=None, efill=None, ehatch=None,
                  errinlegend=None, alpha=1,
-                 ## figure kw
-                 figsize=None, figint=False,
                  ## set_fig kw
-                 left=.1, bottom=.1, right=.99, top=.9,
-                 wspace=.1, hspace=.1, title='Untitled', titlesize=None,
+                 left=.15, bottom=.1, right=.95, top=.9,
+                 wspace=None, hspace=None, title=None, titlesize=20,
                  ## set_ax kw
                  xlog=None, ylog=None,
                  basex=10, basey=10, nonposx='clip', nonposy='clip',
-                 xlim=(None, None), ylim=(None,None), ticksize=None,
-                 xlabel='X', ylabel='Y', labelsize=None,
+                 xlim=(None, None), ylim=(None,None),
+                 tk=None, tkmi=None, tkform=None, tksize=None, # same xy
+                 xtk=None, xtkmi=None, xtkform=None, xtksize=15, # x
+                 ytk=None, ytkmi=None, ytkform=None, ytksize=15, # y
+                 xlabel='X', ylabel='Y', xsize=None, ysize=None, xysize=15,
                  ## set_legend kw
-                 legend=None, legendsize=None, legendalpha=1,
-                 anchor=None,figtight=False,
+                 loc=None, legendsize=15, legendalpha=1,
+                 anchor=None, figtight=False,
                  ## Other kw
                  clib='base', c=None, **kwargs):
-        super().__init__(x, y)
+        super().__init__(figsize=figsize, figint=figint, x=x, y=y)
 
-        self.iplot = 0
+        self.pltid = 0
 
-        ## kw aliases
-        ec = merge_aliases(None, ecolor=ecolor, ec=ec)
+        ## Keyword aliases
+        ## Note that ec and ecolor are shared by plot (errorbar) and eplot (ellipse)
+        ec = merge_aliases('grey', edgecolor=edgecolor, ecolor=ecolor, ec=ec) # Default: 'grey'
         elw = merge_aliases(None, elinewidth=elinewidth, elw=elw)
         els = merge_aliases(None, elinestyle=elinestyle, els=els)
+        efc = merge_aliases(None, efillcolor=efillcolor, efc=efc)
 
         ## Auto color
         self.set_clib(clib)
         if c is None:
-            c = self.clib[self.iplot]
-
-        ## Init figure
-        self.figure(figsize, figint)
+            c = self.clib[self.pltid]
 
         ## set_fig
         self.set_fig(left=left, bottom=bottom, right=right, top=top,
-            wspace=wspace, hspace=hspace, title=title, tfsize=titlesize)
+            wspace=wspace, hspace=hspace, title=title, tsize=titlesize)
+
+        ## set_ax
+        if tk is not None:
+            xtk = tk
+            ytk = tk
+        if tkmi is not None:
+            xtkmi = tkmi
+            ytkmi = tkmi
+        if tkform is not None:
+            xtkform = tkform
+            ytkform = tkform
+        if tksize is not None:
+            xtksize = tksize
+            ytksize = tksize
+        if xysize is not None:
+            xsize = xysize
+            ysize = xysize
+        self.set_ax(xlog=xlog, ylog=ylog,
+                    basex=basex, basey=basey, nonposx=nonposx, nonposy=nonposy,
+                    xlim=xlim, ylim=ylim,
+                    xtk=xtk, xtkmi=xtkmi, xtkform=xtkform, xtksize=xtksize,
+                    ytk=ytk, ytkmi=ytkmi, ytkform=ytkform, ytksize=ytksize,
+                    xlabel=xlabel, xsize=xsize, ylabel=ylabel, ysize=ysize)
 
         ## plot
         ell = (rho is not None)
         if (not ell):
             
-            self.plot(x=x, y=y, xerr=xerr, yerr=yerr,
+            self.plot(x=x, y=y, yerr=yerr, xerr=xerr,
                       xisln=xisln, yisln=yisln,
                       fmt=fmt, ec=ec, elw=elw, els=els, # errorbar kw
                       capsize=capsize, barsabove=barsabove, # errorbar kw
                       c=c, alpha=alpha, **kwargs)
+            self.append_handles()
             
         else:
 
             self.plot(x=x, y=y, xisln=xisln, yisln=yisln,
                       fmt=fmt, c=c, alpha=alpha, **kwargs)
+            self.append_handles()
+            ## Ellipse errors
             self.eplot(x=x, y=y, mask=mask,
                        xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax,
                        xisln=xisln, yisln=yisln,
                        sigmax=sigmax, sigmay=sigmay, rho=rho,
                        gammax=gammax, gammay=gammay,
                        ec=ec, elw=elw, els=els,
-                       efill=efill, efillcolor=efillcolor, ehatch=ehatch,
+                       efill=efill, efc=efc, ehatch=ehatch,
                        errinlegend=errinlegend, alpha=alpha)
-            
-        ## set_ax
-        self.set_ax((1,1), xlog, ylog, basex, basey, nonposx, nonposy, xlim, ylim,
-                    ticksize, ticksize, xlabel, ylabel, labelsize, labelsize)
+            self.append_handles()
+            ## Replace line by patch in legend
+            epatch = mpatches.Patch(ec=ec, lw=elw, ls=elw,
+                                    fill=efill, fc=efc, alpha=alpha,
+                                    hatch=ehatch, label=errinlegend)
+            self.handles[-1] = epatch
 
-        if legend is not None:
-            self.set_legend(subpos=(1,1), loc=legend, fontsize=legendsize,
+        ## set_legend
+        if loc is not None:
+            self.set_legend(loc=loc, fontsize=legendsize,
                             bbox_to_anchor=anchor, figtight=figtight,
                             framealpha=legendalpha)
-        self.legend = legend
+        self.loc = loc
         self.legendsize = legendsize
         self.anchor = anchor
         self.figtight = figtight
         self.legendalpha = legendalpha
 
-    def add_plot(self, x=None, y=None, xerr=None, yerr=None,
+    def add_plot(self, x=None, y=None, yerr=None, xerr=None,
                  ## errorbar kw
                  fmt='', capsize=None, barsabove=False,
-                 ecolor=None, ec=None, elinewidth=None, elw=None,
-                 elinestyle=None, els=None,
                  ## eplot kw
+                 edgecolor='grey', ecolor='grey', ec='grey',
+                 elinewidth=None, elw=None, elinestyle=None, els=None,
                  mask=None, xmin=None, xmax=None, ymin=None, ymax=None,
                  sigmax=None, sigmay=None, rho=None,
                  gammax=None, gammay=None,xisln=False, yisln=False,
-                 efill=None, efillcolor=None, ehatch=None,
+                 efillcolor=None, efc=None, efill=None, ehatch=None,
                  errinlegend=None, alpha=1,
+                 ## set_legend kw (only when addlegend=True)
+                 addlegend=False, loc=None, legendsize=15,
+                 legendalpha=1, anchor=None, figtight=False,
                  ## Other (errorbar) kw
-                 c=None, **kwargs):
+                 c=None, label=None, **kwargs):
+        '''
+        ------ INPUT ------
+        plotool.plot(**kwargs)
+        '''
+        self.pltid += 1
 
-        self.iplot += 1
-
-        ## kw aliases
-        ec = merge_aliases(None, ecolor=ecolor, ec=ec)
+        ## Keyword aliases
+        ## Note that ec and ecolor are shared by plot (errorbar) and eplot (ellipse)
+        ec = merge_aliases('grey', edgecolor=edgecolor, ecolor=ecolor, ec=ec) # Default: 'grey'
         elw = merge_aliases(None, elinewidth=elinewidth, elw=elw)
         els = merge_aliases(None, elinestyle=elinestyle, els=els)
+        efc = merge_aliases(None, efillcolor=efillcolor, efc=efc)
 
         ## Auto color
-        if self.iplot==len(self.clib):
-            self.iplot = 0
+        if self.pltid==len(self.clib):
+            self.pltid = 0
         if c is None:
-            c = self.clib[self.iplot]
+            c = self.clib[self.pltid]
         
         if x is None:
             x = self.x
@@ -850,30 +1075,48 @@ class pplot(plotool):
             self.y = y
 
         ## plot
+        if addlegend:
+            self.reset_handles()
+            self.loc = loc
+            self.legendsize = legendsize
+            self.anchor = anchor
+            self.figtight = figtight
+            self.legendalpha = legendalpha
+            
         ell = (rho is not None)
         if (not ell):
             
-            self.plot(x=x, y=y, xerr=xerr, yerr=yerr,
+            self.plot(x=x, y=y, yerr=yerr, xerr=xerr,
                       xisln=xisln, yisln=yisln,
                       fmt=fmt, ec=ec, elw=elw, els=els, # errorbar kw
                       capsize=capsize, barsabove=barsabove, # errorbar kw
-                      c=c, alpha=alpha, **kwargs)
+                      c=c, alpha=alpha, label=label, **kwargs)
+            self.append_handles()
             
         else:
 
             self.plot(x=x, y=y, xisln=xisln, yisln=yisln,
-                      fmt=fmt, c=c, alpha=alpha, **kwargs)
+                      fmt=fmt, c=c, alpha=alpha,
+                      label=label, **kwargs)
+            self.append_handles()
+            ## Ellipse errors
             self.eplot(x=x, y=y, mask=mask,
                        xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax,
                        xisln=xisln, yisln=yisln,
                        sigmax=sigmax, sigmay=sigmay, rho=rho,
                        gammax=gammax, gammay=gammay,
                        ec=ec, elw=elw, els=els,
-                       efill=efill, efillcolor=efillcolor, ehatch=ehatch,
+                       efill=efill, efc=efc, ehatch=ehatch,
                        errinlegend=errinlegend, alpha=alpha)
+            self.append_handles()
+            ## Replace line by patch in legend
+            epatch = mpatches.Patch(ec=ec, lw=elw, ls=els,
+                                    fill=efill, fc=efc, alpha=alpha,
+                                    hatch=ehatch, label=errinlegend)
+            self.handles[-1] = epatch
 
-        ## Add legend
-        if self.legend is not None:
-            self.set_legend(subpos=(1,1), loc=self.legend, fontsize=self.legendsize,
+        ## set_legend
+        if (self.loc is not None) and (label is not None):
+            self.set_legend(loc=self.loc, fontsize=self.legendsize,
                             bbox_to_anchor=self.anchor, figtight=self.figtight,
                             framealpha=self.legendalpha)
