@@ -1,6 +1,7 @@
-#+TITLE: RAPYUTA: libraRy of Astronomical PYthon UTilities for Astrophysics nerds
+#+TITLE: RAPYUTA
 #+AUTHOR: Dangning HU
 
+libraRy of Astronomical PYthon UTilities for Astrophysics nerds
 * Introduction
 Laputa: Castle in the Sky / 天空の城ラピュタ (Tenkū no Shiro Rapyuta)
 
@@ -30,6 +31,10 @@ For the moment, there is only built-in documentation available, which can be cal
 ** Contact
 dangning.hu@outlook.com
 * Version log
+** v2.2 (20220220)
+- ~plots.plotool~
+  + Added tick label formatter 'mylog' (opitimized for <1 case)
+- Added ~tests/use_cases/~
 ** v2.1 (20211202)
 - ~plots.plotool~
   + Merged ~figure~ to ~__init__~ (using ~squeeze~ kw to get ~self.axes~)

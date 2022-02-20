@@ -47,11 +47,11 @@ colors = ['k','c','m']
 p = pplot(wvl, fwhm_lam, label='Geometric mean',
           # xlim=(4, 41), ylim=(0, 10),
           xlog=1, ylog=0, clib=colors, lw=3, ls='--',
-          xlabel=r'$\rm{Wavelength,}\ \lambda\ [\mu m]$',
-          ylabel=r'$\rm{FWHM}\ [^{\prime\prime}]$',
+          xlabel=r'$\rm Wavelength,\ \lambda\ [\mu m]$',
+          ylabel=r'$\rm FWHM\ [^{\prime\prime}]$',
           title=None, zorder=100, alpha=.8,
           figsize=(10,6), left=.1, bottom=.15, top=.95, right=.95,
-          titlesize=20, labelsize=20, ticksize=20)
+          titlesize=20, xysize=20, tksize=20)
 p.add_plot(wvl, fwhm_par, label='Parallel', lw=5, alpha=1)
 p.add_plot(wvl, fwhm_per, label='Perpendicular', lw=5, alpha=1)
 p.ax.legend(loc='upper left',fontsize=20, framealpha=0)
@@ -59,6 +59,6 @@ xtic = [5, 6, 7, 8, 9, 11, 13, 15, 20, 30, 40]
 p.ax.set_xticks(xtic, minor=False) # major
 p.ax.xaxis.set_major_formatter(ScalarFormatter()) # major
 
-p.save(filOUT, transparent=True)
+p.save(filOUT, transparent=False, figtight=True)
 
 # p.show()

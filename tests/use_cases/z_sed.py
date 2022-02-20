@@ -13,7 +13,6 @@ if not os.path.exists(outdir):
     os.makedirs(outdir)
 
 import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib.transforms as mtransforms
 
 ## rapyuta
@@ -22,8 +21,8 @@ from rapyuta.plots import pplot
 
 
 ## Input/output
-filIN = datdir+'dustobs'
-filOUT = outdir+'sed_shift.png'
+filIN = datdir+'sed_ARAA'
+filOUT = outdir+'z_sed.png'
 
 ## Read data
 nuLnutot = read_hdf5(filIN, 'nuLnutot')
@@ -37,12 +36,12 @@ colors = ['k','c','g','maroon']
 p = pplot(w0, nuLnutot, label='Rest frame',
           xlim=(2e-2, 1e6), ylim=(1e1, 8e12),
           xlog=1, ylog=1, clib=colors, lw=2,
-          xlabel=r'$\rm{Wavelength,}\ \lambda\ [\mu m]$',
-          ylabel=r'$\rm{Monochromatic\ Luminosity,}\ \nu L_{\nu}\ [L_{\odot}]$',
-          title=None,
+          xlabel=r'$\rm Wavelength,\ \lambda\ [\mu m]$',
+          ylabel=r'$\rm Monochromatic\ Luminosity,\ \nu L_{\nu}\ [L_{\odot}]$',
+          xtkform='log_sci', ytkform='log_sci', tksize=20,
           figsize=(12,6), left=.1, bottom=.15, top=.95, right=.95,
-          titlesize=20, labelsize=20, ticksize=20)
-p.ax.text(0.2, 2e12, r'$[H_{\alpha}]_{6563\AA}$',size=20,c='k')
+          title=None, titlesize=20, xysize=20)
+p.ax.text(0.2, 2e12, r'$\rm [H_{\alpha}]_{6563\AA}$',size=20,c='k')
 p.ax.annotate('', xytext=(0.6563,1e12),xy=(0.6563,2e11),
               arrowprops=dict(facecolor='k',shrink=0,width=.1,
                               headwidth=5,headlength=10))
@@ -63,7 +62,7 @@ for i in range(len(z)):
       ytext = 2e12
       ybot = 1e12
       yupp = 2e11
-    p.ax.text(lam*.5, ytext, str(lam)+r'$\mu m$',size=20,c=colors[i+1])
+    p.ax.text(lam*.5, ytext, str(lam)+r'$\rm \mu$m',size=20,c=colors[i+1])
     p.ax.annotate('', xytext=(lam,ybot),xy=(lam,yupp),
                   arrowprops=dict(edgecolor=colors[i+1],facecolor=colors[i+1],
                                   shrink=0,width=.1,
@@ -102,6 +101,6 @@ p.ax.fill_between(w0, 0, 1, where=IRf<0,
                   facecolor='r', alpha=0.6, transform=trans)
 p.ax.legend(loc='upper right',# bbox_to_anchor=(1,1),
             fontsize=20, framealpha=0,)
-p.save(filOUT, transparent=True)
+p.save(filOUT, transparent=False, figtight=True)
 
 # p.show()

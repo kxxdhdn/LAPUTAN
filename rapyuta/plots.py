@@ -23,7 +23,7 @@ from scipy import optimize
 from matplotlib.ticker import (
     NullFormatter, ScalarFormatter, LogFormatter,
     LogFormatterExponent, LogFormatterSciNotation,
-    PercentFormatter
+    PercentFormatter, FuncFormatter
 )
 import matplotlib.colors as mplc
 import matplotlib.pyplot as plt
@@ -452,6 +452,12 @@ class plotool:
             xformat = LogFormatterExponent()
         elif xtkform=='log_sci':
             xformat = LogFormatterSciNotation()
+        elif xtkform=='mylog':
+            xformat = FuncFormatter(
+                lambda a,pos: (
+                    '{{:.{:1d}f}}'.format(int(np.maximum(-np.ma.log10(np.array([a])).filled(0),0)))
+                ).format(a)
+            )
         elif xtkform=='pct':
             xformat = PercentFormatter()
         else:
@@ -473,6 +479,12 @@ class plotool:
             yformat = LogFormatterExponent()
         elif ytkform=='log_sci':
             yformat = LogFormatterSciNotation()
+        elif ytkform=='mylog':
+            yformat = FuncFormatter(
+                lambda a,pos: (
+                    '{{:.{:1d}f}}'.format(int(np.maximum(-np.ma.log10(np.array([a])).filled(0),0)))
+                ).format(a)
+            )
         elif ytkform=='pct':
             yformat = PercentFormatter()
         else:

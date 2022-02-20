@@ -1,0 +1,34 @@
+================================================================================
+Title: Observational Constraints on the Physical Properties of Interstellar 
+       Dust in the Post-Planck Era 
+Authors: Hensley B.S., Draine B.T. 
+================================================================================
+Description of contents: This tar.gz archive file contains the data behind
+    Figure 14 in the accepted version of the manuscript listed above. These
+    files represent the adopted constraints on the total and polarized
+    extinction from dust in the diffuse ISM, and in the bottom panel the
+    adopted constraints on the total and polarized emission from
+    interstellar dust. The specific files are as follows: 
+    
+ext_summary.mrt    : Adopted constraints on total extinction as a function of wavelength.
+extpol_summary.mrt : Adopted constraints on polarized extinction as a function of wavelength.
+ipol_summary.mrt   : Adopted constraints on polarized emission from interstellar dust
+irem_summary.mrt   : Adopted constraints on total emission from interstellar dust
+
+
+System requirements: The files are formatted according to the machine
+    readable format used by the AAS Journals and CDS/VizieR. Specific
+    information on the structure of MRT files can be found at:
+
+        AAS: https://journals.aas.org/mrt-overview/
+        CDS: http://cds.u-strasbg.fr/doc/catstd.htx
+
+    These files can be read in python using the astropy package:
+
+        from astropy.table import Table
+        data = Table.read("ext_summary.mrt", format="ascii.cds")
+
+Additional comments: ## Please replace this with additional comments
+ or even text from the main paper useful for the AAS Journal reader. ##
+
+================================================================================
