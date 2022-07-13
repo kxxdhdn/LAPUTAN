@@ -6,13 +6,20 @@
 Maths
 
     f_lin, f_lin0, f_lin1, gaussian, gaussian2D,
-    rms, nanrms, std, nanstd, nanavg, bsplinterpol
+    rms, nanrms, std, nanstd, nanavg,
+    icorr2ij, ij2icorr,
+    bsplinterpol
 
 """
 
 import math
 import numpy as np
 import scipy.interpolate as interpolate
+import warnings
+
+## Local
+from utilities import InputError
+
 
 def f_lin(x, A, B):
     '''
@@ -157,6 +164,74 @@ def nanavg(a, axis=None, weights=None, MaskedValue=np.nan):
         avg[mask_all] = MaskedValue
 
     return avg
+
+def icorr2ij(Npar, Ncorr=None, upper=True):
+    '''
+    Get the pair of parameter indices and their correlation coefficient index
+    
+    ------ INPUT ------
+    Npar                Number of parameters
+    Ncorr               Number of correlation coefficients (Default: None)
+    upper               Upper or lower triangles (Default: True)
+    ------ OUTPUT ------
+    ij                  Indices with a dimension of (Ncorr,2)
+    '''
+    if Ncorr is None:
+        # Ncorr = math.comb(Npar,2) # Python v3.8+
+        Ncorr = int( Npar*(Npar-1)/2 )
+    ij = np.empty((Ncorr,2), dtype=int)
+    icorr = 0
+    for i in range(Npar):
+        for j in range(Npar):
+            if upper:
+                if j>i:
+                    ij[icorr,:] = [i+1,j+1]
+                    icorr += 1
+            else:
+                if i>j:
+                    ij[icorr,:] = [j+1,i+1]
+                    icorr += 1
+
+    return ij
+
+def ij2icorr(i, j, Npar, verbose=False):
+    '''
+    Get the correlation coefficient index given the pair of parameter indices
+    
+    ------ INPUT ------
+    i                   Index of the first parameter (>= 1)
+    j                   Index of the second parameter (>= 1)
+    Npar                Number of parameters
+    verbose             Default: False
+    ------ OUTPUT ------
+    icorr               Indices of correlation coefficient
+    '''
+    ## (i-1)*N-(i+1)C2+j
+    try:
+        icorr = 0
+        for ii in range(Npar):
+            for jj in range(Npar):
+                if j>i:
+                    if verbose:
+                        print('Upper triangle detected.')
+                    if jj>ii:
+                        icorr += 1
+                    if ii==i-1 and jj==j-1:
+                        raise StopIteration
+                elif i>j:
+                    if verbose:
+                        print('Lower triangle detected.')
+                    if ii>jj:
+                        icorr += 1
+                    if ii==i-1 and jj==j-1:
+                        raise StopIteration
+                else:
+                    warnings.warn('<maths.ij2icorr> i equals to j! icorr = 0')
+                    raise StopIteration
+
+    except StopIteration:
+        
+        return icorr
 
 def bsplinterpol(x, y, x0):
     '''

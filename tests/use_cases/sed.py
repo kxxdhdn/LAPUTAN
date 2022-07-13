@@ -95,8 +95,8 @@ p = pplot(w, total, figsize=(15,10),
           c='k', lw=5, zorder=-.1,
           xlog=True, ylog=True, xlim=(1e-2,9e4), ylim=(5e2,8e9),
           xtkform='log_sci', ytkform='log_sci',
-          xlabel=r'$\rm Wavelength, \lambda\ [\mu m]$',
-          ylabel=r'$\rm Monochromatic luminosity, \nu L_\nu\ [L_\odot]$',
+          xlabel=r'Wavelength, $\rm \lambda\ [\mu m]$',
+          ylabel=r'Monochromatic luminosity, $\rm \nu L_\nu\ [L_\odot]$',
           tksize=20, xysize=20)
 p.trans = 'Axes'
 lw1 = 2

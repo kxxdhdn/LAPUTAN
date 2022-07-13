@@ -9,7 +9,8 @@ Plots
     plotool:
         set_clib, set_fig, set_ax, 
         reset_handles, append_handles, get_handles, set_legend, 
-        plot, eplot, save, show, close
+        plot, eplot, save, show, close,
+        transData2Axes, transData2Figure, transAxes2Data, transAxes2Figure,
     pplot(plotool):
         add_plot, add_legend
 
@@ -518,6 +519,7 @@ class plotool:
         elif self.trans=='Axes' or self.trans=='Data':
             self.ax.add_artist(self.legend)
         self.handles = []
+        self.labels = []
         self.horder = 0
 
         return self.handles
@@ -553,7 +555,7 @@ class plotool:
         
     def set_legend(self, subpos=None,
                    left=None, right=None, bottom=None, top=None, figtight=False,
-                   handles=None, **kwargs):
+                   handles=None, loc=None, locext=0, **kwargs):
         '''
         - bbox_to_anchor rules: (1,1) correspond to upper right of the axis
 
@@ -579,10 +581,21 @@ class plotool:
         shrinkx,shrinky     current Axes size (Default: 1)
         figtight            ignore Axes settings (Default: False)
         handles             Default: None - self.handles
+        loc                 relative position of legend box (Default: None)
+                              'extra upper left' - extend axis limits to add legend
+                              'extra center left'
+                              'extra lower left'
+                              'extra upper right'
+                              'extra center right'
+                              'extra lower right'
+                              'extra upper center'
+                              'extra lower center'
+        locext              percentage of the axis limit length extension (Default: +0%)
+                              - positive: left/right
+                              - negtive: upper/lower
 
         self.fig/ax.legend(**kwargs):
         title               title of legend box
-        loc                 relative position of legend box
         bbox_to_anchor      reference point of legend box
         bbox_transform      reference frame of coordinates
                               self.fig.transFigure
@@ -593,11 +606,63 @@ class plotool:
         if handles is None:
             handles = self.handles
 
+        ## Extra loc
+        xmin, xmax = self.ax.get_xlim()
+        ymin, ymax = self.ax.get_ylim()
+        if loc=='extra upper left':
+            loc = 'upper left'
+            ## if locext==0: trivial
+            if locext>0:
+                self.ax.set_xlim( left=xmin-locext*(xmax-xmin) )
+            elif locext<0:
+                self.ax.set_ylim( top=ymax-locext*(ymax-ymin) )
+        elif loc=='extra upper center':
+            loc = 'upper center'
+            ## if locext>=0: trivial
+            if locext<0:
+                self.ax.set_ylim( top=ymax-locext*(ymax-ymin) )
+        elif loc=='extra upper right':
+            loc = 'upper right'
+            ## if locext==0: trivial
+            if locext>0:
+                self.ax.set_xlim( right=xmax+locext*(xmax-xmin) )
+            elif locext<0:
+                self.ax.set_ylim( top=ymax-locext*(ymax-ymin) )
+        elif loc=='extra lower left':
+            loc = 'lower left'
+            ## if locext==0: trivial
+            if locext>0:
+                self.ax.set_xlim( left=xmin-locext*(xmax-xmin) )
+            elif locext<0:
+                self.ax.set_ylim( bottom=ymin+locext*(ymax-ymin) )
+        elif loc=='extra lower center':
+            loc = 'lower center'
+            ## if locext>=0: trivial
+            if locext<0:
+                self.ax.set_ylim( bottom=ymin+locext*(ymax-ymin) )
+        elif loc=='extra lower right':
+            loc = 'lower right'
+            ## if locext==0: trivial
+            if locext>0:
+                self.ax.set_xlim( right=xmax+locext*(xmax-xmin) )
+            elif locext<0:
+                self.ax.set_ylim( bottom=ymin+locext*(ymax-ymin) )
+        elif loc=='extra center left':
+            loc = 'center left'
+            ## if locext<=0: trivial
+            if locext>0:
+                self.ax.set_xlim( left=xmin-locext*(xmax-xmin) )
+        elif loc=='extra center right':
+            loc = 'center right'
+            ## if locext<=0: trivial
+            if locext>0:
+                self.ax.set_xlim( left=xmax+locext*(xmax-xmin) )
+
         if self.trans=='Figure':
             self.fig.subplots_adjust(left=left, right=right,
                                      bottom=bottom, top=top)
             
-            self.legend = self.fig.legend(handles=handles, **kwargs)
+            self.legend = self.fig.legend(handles=handles, loc=loc, **kwargs)
         elif self.trans=='Axes' or self.trans=='Data':
             if self.nrows!=1 or self.ncols!=1:
                 if subpos is not None:
@@ -624,7 +689,7 @@ class plotool:
                 y1 = bbox.y0 + top*(bbox.y1-bbox.y0)
             self.ax.set_position([x0, y0, x1-x0, y1-y0])
 
-            self.legend = self.ax.legend(handles=handles, **kwargs)
+            self.legend = self.ax.legend(handles=handles, loc=loc, **kwargs)
         else:
             raise InputError('<plotool.set_legend>',
                              'Non-recognized transformation!')
@@ -920,6 +985,62 @@ class plotool:
     def close(self):
 
         plt.close(self.figid)
+
+    def transData2Axes(self, ptData=(0,0)):
+        '''
+        Transform the coordinates of a point from transData to transAxes
+
+        ------ INPUT ------
+        ptData              point in transData (Default: (0,0))
+        ------ OUTPUT ------
+        ptAxes              point in transAxes
+        '''
+        ptAxes = self.ax.transData.transform(ptData)
+        ptAxes = self.ax.transAxes.inverted().transform(ptAxes)
+        
+        return ptAxes
+
+    def transData2Figure(self, ptData=(0,0)):
+        '''
+        Transform the coordinates of a point from transData to transFigure
+
+        ------ INPUT ------
+        ptData              point in transData (Default: (0,0))
+        ------ OUTPUT ------
+        ptFig               point in transFigure
+        '''
+        ptFig = self.ax.transData.transform(ptData)
+        ptFig = self.fig.transFigure.inverted().transform(ptFig)
+        
+        return ptFig
+
+    def transAxes2Data(self, ptAxes=(0,0)):
+        '''
+        Transform the coordinates of a point from transAxes to transData
+
+        ------ INPUT ------
+        ptAxes              point in transAxes (Default: (0,0))
+        ------ OUTPUT ------
+        ptData              point in transData
+        '''
+        ptData = self.ax.transAxes.transform(ptAxes)
+        ptData = self.ax.transData.inverted().transform(ptData)
+        
+        return ptData
+
+    def transAxes2Figure(self, ptAxes=(0,0)):
+        '''
+        Transform the coordinates of a point from transAxes to transFigure
+
+        ------ INPUT ------
+        ptAxes              point in transAxes (Default: (0,0))
+        ------ OUTPUT ------
+        ptFig               point in transFigure
+        '''
+        ptFig = self.ax.transAxes.transform(ptAxes)
+        ptFig = self.fig.transFigure.inverted().transform(ptFig)
+        
+        return ptFig
 
 class pplot(plotool):
     '''

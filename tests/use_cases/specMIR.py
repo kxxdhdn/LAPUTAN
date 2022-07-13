@@ -76,9 +76,8 @@ Pabs = fabs(wabs)
 # print(w_CO)
 # print(Av_CO)
 
-
-## PLOT
-##------
+## PLOT obs
+##----------
 p = pplot(figsize=(20,12),
           # c='k', lw=5, zorder=-.1,
           xlog=True, ylog=True, xlim=(2.5,32), ylim=(1e-1,2e3),
@@ -158,7 +157,7 @@ labE1 = [r'$\rm H_2$O'+' ice \n3.05 '+r'$\rm \mu$m',
          r'$\rm H_2$O'+' ice \n6.02 '+r'$\rm \mu$m',
          r'C$\rm O_2$'+' ice \n15.2 '+r'$\rm \mu$m', ]
 cenE1 = [3.05, 4.67, 6.02, 15.2]
-sigE1 = [.27, .04, .49, .18] # Oberg2007, Fraser2004, Bisschop2007
+sigE1 = [.27, .04, .49, .18] # Oberg2007, Bouwman2007, Bisschop2007
 for i in range(len(labE1)):
     Ngrad = 100 # color gradient number (3-sigma range)
     for j in range(Ngrad):

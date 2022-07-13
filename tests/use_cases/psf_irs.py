@@ -17,6 +17,7 @@ import numpy as np
 from matplotlib.ticker import ScalarFormatter, NullFormatter
 
 ## rapyuta
+from rapyuta.arrays import closest
 from rapyuta.inout import read_hdf5
 from rapyuta.plots import pplot
 
@@ -44,13 +45,17 @@ sigma_lam = np.sqrt(sigma_par * sigma_per)
 
 colors = ['k','c','m']
 
+i = closest(wvl, 20)
+print(fwhm_par[i])
+exit()
+
 p = pplot(wvl, fwhm_lam, label='Geometric mean',
           # xlim=(4, 41), ylim=(0, 10),
           xlog=1, ylog=0, clib=colors, lw=3, ls='--',
           xlabel=r'$\rm Wavelength,\ \lambda\ [\mu m]$',
           ylabel=r'$\rm FWHM\ [^{\prime\prime}]$',
           title=None, zorder=100, alpha=.8,
-          figsize=(10,6), left=.1, bottom=.15, top=.95, right=.95,
+          figsize=(8,6), left=.1, bottom=.15, top=.95, right=.95,
           titlesize=20, xysize=20, tksize=20)
 p.add_plot(wvl, fwhm_par, label='Parallel', lw=5, alpha=1)
 p.add_plot(wvl, fwhm_per, label='Perpendicular', lw=5, alpha=1)

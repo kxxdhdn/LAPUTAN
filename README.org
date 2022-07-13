@@ -31,6 +31,13 @@ For the moment, there is only built-in documentation available, which can be cal
 ** Contact
 dangning.hu@outlook.com
 * Version log
+** v2.2.1 (20220616)
+- ~plots.plotool~
+  + Fixed labels for ~reset_handles~
+  + Added ~transData2Axes~ series
+  + Added extra loc (~locext~) for ~set_legend~
+- Added ~maths.icorr2ij~ and ~maths.ij2icorr~
+- Updated ~tests/use_cases/~
 ** v2.2 (20220220)
 - ~plots.plotool~
   + Added tick label formatter 'mylog' (opitimized for <1 case)

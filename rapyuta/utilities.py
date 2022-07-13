@@ -7,6 +7,7 @@ Utilities
 
     Error
     InputError(Error)
+    merge_aliases, is_different_value
 
 """
 
@@ -47,7 +48,13 @@ def merge_aliases(default, **kwargs):
             return d.popitem()[1]
     else:
         return default
-    
+
+## The guru way to stop a for loop
+## https://stackoverflow.com/questions/6346492/how-to-stop-a-for-loop
+# def is_different_value(iterable, i, j):
+#   value = iterable[i][j]
+#   return  any(any((cell != value for cell in col)) for col in iterable)
+
 ## Tests
 if __name__ == '__main__':
 
