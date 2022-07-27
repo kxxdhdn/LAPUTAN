@@ -1,7 +1,73 @@
-#+TITLE: RAPYUTA archived version log (v<2.0)
+#+TITLE: RAPYUTA Archives
+#+SUBTITLE: Released version log
 #+AUTHOR: Dangning HU
 
 * Version log
+:PROPERTIES:
+:UNNUMBERED:
+:END:
+** v2.1 (20211202)
+- ~plots.plotool~
+  + Merged ~figure~ to ~__init__~ (using ~squeeze~ kw to get ~self.axes~)
+  + 0-indexed ~subpos~
+  + Supported transformation between coordinate systems with ~self.trans~ kw
+  + Supported multi-legends by adding ~reset_handles~, ~append_handles~, and ~get_handles~
+  + Defined default tick settings in ~set_ax~
+  + Clarified ~**kwargs~ usage in each function
+  + Other kw changes
+- ~plots.pplot~
+  + Adapted to higher level class changes
+  + Defined default uni-plot settings
+- Updated tests
+- Not compatible with scripts using former version ~plots.plotool~ class
+** v2.0.4 (20211117)
+- [VITAL] Fixed kernel selection ~imaging.iconvolve~ (should be FWHM instead of Gaussian 1-sigma...)
+- ~imaging.improve~
+  + Allowed external wgrid input for ~smooth~
+- Fixed bugs in ~plots~
+  + Set default ~subpos=(0,0)~ (keep current axis)
+** v2.0.3 (20211008)
+- Updated output name conventions
+  + 'type' outputs (e.g. ~ds~): ~header~, ~data~, ~unc~, ~wave~, ~hyperdata~, etc.
+  + 'class' outputs (e.g. ~improve~): ~hdr~, ~im~, ~unc~, ~wvl~, etc.
+  + 'class' function ouputs: ~header()~, ~image()~, ~unc~, ~wave()~
+- Added ~rand_pointing~ to all functions with ~dist~
+- Revisited all 3D/2D conditional statements with ~self.Ndim~
+- ~imaging.improve~
+  + Added original NaN mask for ~rand_pointing~ (in order not to invent data at NaN pixels)
+  + Changed resampling from 'by axis' to 'by grouped pixels' for ~groupixel~ (NaN mean)
+- ~imaging.iswarp~
+  + Renamed ~reproject_mc~ to ~combine_mc~ (which works also for coadding)
+- ~imaging.cupid~: minor changes in outputs
+** v2.0.2 (20211001)
+- ~calib.intercalib~
+  + Added super pixel support
+- ~imaging.iswarp~
+  + Added ~reproject_mc~
+- Added ~arrays.pix2sup~, ~arrays.sup2pix~, ~imaging.igroupixel~ and ~imaging.ismooth~
+- Merged ~imaging.respect~ to ~imaging.improve~
+  + Removed ~concat~ (alternative of ~imaging.concatenate~)
+  + Renamed old ~smooth~ to ~artifact~
+  + Added ~smooth~ (new) and ~groupixel~
+- Renamed ~imaging.sextract~ to ~imaging.cupid~
+  + Modified inputs variables
+  + Added super pixel (non-square rebinning) support
+  + Moved ~rand_pointing~ to ~imaging.improve~ and supported convert pos err to flux unc
+  + [VITAL] Reported wrong ~ispec~ in ~spec_build~ in former version
+- Updated tests
+** v2.0.1 (20210916)
+- Imported error ellipse support from a marvelous Python library of F. Galliano
+  + ~arrays~: ~arrayize~, ~ramp~
+  + ~plots~: ~plotrange~, ~Btau~, ~Ctau~, ~ellipse~ and ~SUE~
+  + ~plots.plotool~: ~eplot~
+- ~plots.plotool~
+  + Fixed the bug when any of ~nrows~ or ~ncols~ equals to 1, ~self.axes~ is 1D so ~self.ax~ cannot be attributed
+  + Added ~xisln~ and ~yisln~ kw for ~plot~
+  + Added ~close~
+- ~plots.pplot~
+  + Fixed the bug when legend anchor kw appears tight layout is auto deactivated
+- Added ~tests/test_plots.py~
+- Renamed ~arrays.allist~ to ~arrays.listize~
 ** v2.0 (20210914)
 - Rename package from ~laputan~ to ~rapyuta~ due to the French pun...thus it turns to the Ghibli origin!
 - ~plots.plotool~

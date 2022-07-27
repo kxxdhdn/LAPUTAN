@@ -1,18 +1,29 @@
 #+TITLE: RAPYUTA
+#+SUBTITLE: libraRy of Astronomical PYthon UTilities for Astrophysics nerds
 #+AUTHOR: Dangning HU
+#+OPTIONS: toc:1
 
-libraRy of Astronomical PYthon UTilities for Astrophysics nerds
+[[https://img.shields.io/pypi/v/rapyuta.png]] [[https://img.shields.io/pypi/dm/rapyuta.png]] [[https://img.shields.io/pypi/l/rapyuta.png]]
+
 * Introduction
-Laputa: Castle in the Sky / 天空の城ラピュタ (Tenkū no Shiro Rapyuta)
-
+:PROPERTIES:
+:UNNUMBERED:
+:END:
+#+TOC: headlines 2 local
+The ~rapyuta~ package compiles several software/packages/libraries in various programming languages (Python, IDL, Fortran, C, /etc./) used in astronomy and astrophysics and provides a consistent Python interface.
+** Laputa: Castle in the Sky / 天空の城ラピュタ (Tenkū no Shiro Rapyuta)
 Laputan is an inhabitant of a flying island in Swift's Gulliver's Travels characterized by a neglect of useful occupations and a devotion to visionary projects.
 
-[[./arx/laputa_sketch.jpg][Rapyuta]]
-** Acronyms [[https://forms.gle/bL421uphHmVFqkUU8][(VOTE link)]]
+[[./arx/laputa.png]] [[./arx/rapyuta.png]]
+** De-Acronyms [[https://forms.gle/bL421uphHmVFqkUU8][(Vote link)]]
 - libraRy of Astronomical PYthon UTilities for Astrophysics nerds
 - Ready-to-use AstroPhysicists' Yon-jigen poketto UlTimAte edition
 - Real AstroPY UTopiAn
 * Helpdesk
+:PROPERTIES:
+:UNNUMBERED:
+:END:
+#+TOC: headlines 2 local
 ** Installation
 #+BEGIN_SRC bash
 ## Install/Update
@@ -22,15 +33,33 @@ pip install rapyuta --upgrade
 pip uninstall rapyuta
 #+END_SRC
 ** Dependencies
-In order to access the full functionality, you will need the following extra dependencies:
 - [[https://github.com/kxxdhdn/laputan/tree/main/idl][IDL]]
 - [[https://www.astromatic.net/software/swarp][SWarp]]
 - [[https://github.com/kxxdhdn/laputan/tree/main/swing][SwING]]
-** User manual
-For the moment, there is only built-in documentation available, which can be called interactively by ~help()~
+** User guides
+- [[./jnum][jnum: Jupyter Notebook User Manual]]
+- [[./uc][uc: User Cases]]
+- A built-in helpdesk can be called interactively by ~help(target_func)~
 ** Contact
 dangning.hu@outlook.com
-* Version log
+* Attribution
+:PROPERTIES:
+:UNNUMBERED:
+:END:
+Open access with the 3-Clause BSD License (see ~./LICENSE~)
+* Version Log
+:PROPERTIES:
+:UNNUMBERED:
+:END:
+** v2.2.2 (20220xxx)
+- JWST data support
+  + [[https://jwst-docs.stsci.edu/understanding-jwst-data-files/jwst-data-formats][JWST Data Formats]]
+    * FITS
+    * ASDF
+    * ECSV
+  + Wrapped ~specutils~ and ~photutils~ for FITS IO
+- Moved ~tests/use_cases/~ to ~uc/~
+- Added jupyter notebook user manual (~jnum~)
 ** v2.2.1 (20220616)
 - ~plots.plotool~
   + Fixed labels for ~reset_handles~
@@ -42,77 +71,4 @@ dangning.hu@outlook.com
 - ~plots.plotool~
   + Added tick label formatter 'mylog' (opitimized for <1 case)
 - Added ~tests/use_cases/~
-** v2.1 (20211202)
-- ~plots.plotool~
-  + Merged ~figure~ to ~__init__~ (using ~squeeze~ kw to get ~self.axes~)
-  + 0-indexed ~subpos~
-  + Supported transformation between coordinate systems with ~self.trans~ kw
-  + Supported multi-legends by adding ~reset_handles~, ~append_handles~, and ~get_handles~
-  + Defined default tick settings in ~set_ax~
-  + Clarified ~**kwargs~ usage in each function
-  + Other kw changes
-- ~plots.pplot~
-  + Adapted to higher level class changes
-  + Defined default uni-plot settings
-- Updated tests
-- Not compatible with scripts using former version ~plots.plotool~ class
-** v2.0.4 (20211117)
-- [VITAL] Fixed kernel selection ~imaging.iconvolve~ (should be FWHM instead of Gaussian 1-sigma...)
-- ~imaging.improve~
-  + Allowed external wgrid input for ~smooth~
-- Fixed bugs in ~plots~
-  + Set default ~subpos=(0,0)~ (keep current axis)
-** v2.0.3 (20211008)
-- Updated output name conventions
-  + 'type' outputs (e.g. ~ds~): ~header~, ~data~, ~unc~, ~wave~, ~hyperdata~, etc.
-  + 'class' outputs (e.g. ~improve~): ~hdr~, ~im~, ~unc~, ~wvl~, etc.
-  + 'class' function ouputs: ~header()~, ~image()~, ~unc~, ~wave()~
-- Added ~rand_pointing~ to all functions with ~dist~
-- Revisited all 3D/2D conditional statements with ~self.Ndim~
-- ~imaging.improve~
-  + Added original NaN mask for ~rand_pointing~ (in order not to invent data at NaN pixels)
-  + Changed resampling from 'by axis' to 'by grouped pixels' for ~groupixel~ (NaN mean)
-- ~imaging.iswarp~
-  + Renamed ~reproject_mc~ to ~combine_mc~ (which works also for coadding)
-- ~imaging.cupid~: minor changes in outputs
-** v2.0.2 (20211001)
-- ~calib.intercalib~
-  + Added super pixel support
-- ~imaging.iswarp~
-  + Added ~reproject_mc~
-- Added ~arrays.pix2sup~, ~arrays.sup2pix~, ~imaging.igroupixel~ and ~imaging.ismooth~
-- Merged ~imaging.respect~ to ~imaging.improve~
-  + Removed ~concat~ (alternative of ~imaging.concatenate~)
-  + Renamed old ~smooth~ to ~artifact~
-  + Added ~smooth~ (new) and ~groupixel~
-- Renamed ~imaging.sextract~ to ~imaging.cupid~
-  + Modified inputs variables
-  + Added super pixel (non-square rebinning) support
-  + Moved ~rand_pointing~ to ~imaging.improve~ and supported convert pos err to flux unc
-  + [VITAL] Reported wrong ~ispec~ in ~spec_build~ in former version
-- Updated tests
-** v2.0.1 (20210916)
-- Imported error ellipse support from a marvelous Python library of F. Galliano
-  + ~arrays~: ~arrayize~, ~ramp~
-  + ~plots~: ~plotrange~, ~Btau~, ~Ctau~, ~ellipse~ and ~SUE~
-  + ~plots.plotool~: ~eplot~
-- ~plots.plotool~
-  + Fixed the bug when any of ~nrows~ or ~ncols~ equals to 1, ~self.axes~ is 1D so ~self.ax~ cannot be attributed
-  + Added ~xisln~ and ~yisln~ kw for ~plot~
-  + Added ~close~
-- ~plots.pplot~
-  + Fixed the bug when legend anchor kw appears tight layout is auto deactivated
-- Added ~tests/test_plots.py~
-- Renamed ~arrays.allist~ to ~arrays.listize~
-** v2.0 (20210914)
-- Rename package from ~laputan~ to ~rapyuta~ due to the French pun...thus it turns to the Ghibli origin!
-- ~plots.plotool~
-  + Removed ~set_font~ and fixed font size and tick problems
-  + Added ~set_legend~ which supports lengend boxes outside the axes
-  + Renamed ~set_border~ as ~set_fig~ and added suptitle
-  + ~set_ax~
-    * Added font size kw
-    * Renamed ~xlab~ as ~xlabel~ (idem. for ~ylab~, thus coherent to matplotlib)
-    * Changed ~nonposx~ default value from 'sym' to 'clip'
-  + Note that all kw in ~set_fig~ and ~set_ax~ can also be executed individually with ~self.ax.set_kw~
-** [[./arx/version_log_arx.org][Archived (v<2.0)]]
+** [[./arx/version_log_arx.org][Archived (v<2.2)]]
