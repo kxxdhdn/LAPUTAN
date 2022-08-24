@@ -1,7 +1,7 @@
 #+TITLE: rapyuta SwING library
 #+AUTHOR: Dangning HU
 
-For synthetic photometry
+For the synthetic photometry module
 
 * Installation Guide
 1. Open ~utilities.f90~, search ~/path/of/this/file/~ and modify ~LibF~ with the location of this file in your machine.
@@ -21,8 +21,10 @@ For synthetic photometry
    make mrproper
    #+END_SRC
 * Troubleshooting
-- ~swing~ is extracted from F. Galliano's library ~SwING~ which is not yet published. To compile it, you need h5fc library which can be obtained by installing [[https://www.hdfgroup.org/downloads/hdf5/source-code/][hdf5]]. Note that if you have other hdf5 installed for example by anaconda, there might be conflicts when calling h5fc. Make sure the correct ~/hdf5/bin~ is on the top of environment variable ~$PATH~.
-
-Please report any bug or advices to dangning.hu@cea.fr
+~swing~ is extracted from F. Galliano's library, ~SwING~, which is well demonstrated by tools used in several publications.
+However, the whole library is not yet publicly available.
+To compile it, you need the h5fc library which can be obtained by installing [[https://www.hdfgroup.org/downloads/hdf5/source-code/][hdf5]].
+Note that if you have other hdf5 installed for example by Anaconda, there might be conflicts when calling h5fc.
+Make sure the correct ~/hdf5/bin~ is on the top of environment variable ~$PATH~.
 * vlog
 - v0.1 (20200413)

@@ -17,7 +17,7 @@ from astropy.wcs import WCS
 
 ## Local
 sys.path.insert(0, testdir+'/..') ## rapyuta path
-from rapyuta.inout import (fclean, read_fits, write_fits,
+from rapyuta.inout import ( fclean, read_fits, write_fits,
                             read_hdf5, write_hdf5,
                             read_ascii, write_ascii,
                             read_csv, write_csv, )

@@ -3,14 +3,17 @@
 #+AUTHOR: Dangning HU
 #+OPTIONS: toc:1
 
-[[https://img.shields.io/pypi/v/rapyuta.png]] [[https://img.shields.io/pypi/dm/rapyuta.png]] [[https://img.shields.io/pypi/l/rapyuta.png]]
+[[https://img.shields.io/pypi/v/rapyuta.png]] 
+[[https://img.shields.io/pypi/dm/rapyuta.png]] 
+[[https://img.shields.io/pypi/l/rapyuta.png]] 
 
 * Introduction
 :PROPERTIES:
 :UNNUMBERED:
 :END:
 #+TOC: headlines 2 local
-The ~rapyuta~ package compiles several software/packages/libraries in various programming languages (Python, IDL, Fortran, C, /etc./) used in astronomy and astrophysics and provides a consistent Python interface.
+~rapyuta~ is a Python package for manipulating, cleaning, processing, analyzing, and visualizing astronomical data.
+~rapyuta~ compiles several software/libraries/scripts in various programming languages (Python, IDL, Fortran, C, /etc./) used in astronomy/astrophysics and provides a consistent Python interface.
 ** Laputa: Castle in the Sky / 天空の城ラピュタ (Tenkū no Shiro Rapyuta)
 Laputan is an inhabitant of a flying island in Swift's Gulliver's Travels characterized by a neglect of useful occupations and a devotion to visionary projects.
 
@@ -19,6 +22,18 @@ Laputan is an inhabitant of a flying island in Swift's Gulliver's Travels charac
 - libraRy of Astronomical PYthon UTilities for Astrophysics nerds
 - Ready-to-use AstroPhysicists' Yon-jigen poketto UlTimAte edition
 - Real AstroPY UTopiAn
+** Structure
+*** Level 0
+- utbox (utility box)
+*** Level 1
+- inout (input & output): utbox
+- latte (list, array, tuple, table, etc.): utbox
+- maths (mathematics): utbox
+*** Level 2
+- plots (viualization): utbox, latte
+- impro (image processing): utbox, latte, maths, inout
+*** Level 3
+- instr (instruments): utbox, latte, inout, plots
 * Helpdesk
 :PROPERTIES:
 :UNNUMBERED:
@@ -26,6 +41,11 @@ Laputan is an inhabitant of a flying island in Swift's Gulliver's Travels charac
 #+TOC: headlines 2 local
 ** Installation
 #+BEGIN_SRC bash
+## Python env control via conda (recommanded)
+conda create --name py310 python=3.10
+## Under the RAPYUTA root path (optional)
+pip install -r requirements.txt
+
 ## Install/Update
 pip install rapyuta --upgrade
 
@@ -33,33 +53,60 @@ pip install rapyuta --upgrade
 pip uninstall rapyuta
 #+END_SRC
 ** Dependencies
-- [[https://github.com/kxxdhdn/laputan/tree/main/idl][IDL]]
-- [[https://www.astromatic.net/software/swarp][SWarp]]
-- [[https://github.com/kxxdhdn/laputan/tree/main/swing][SwING]]
+*** Python 
+The current release of ~rapyuta~ library was developed under Python 3.10 and has been tested for Python >=3.8 versions.
+We constantly update the Python environment in order to have access to the latest features.
+*** [[https://github.com/kxxdhdn/laputan/tree/main/idl][IDL]]
+The well-justified image convolution module was originally written in IDL.
+A pure Python convolving function as an alternative is under the test.
+*** [[https://www.astromatic.net/software/swarp][SWarp]]
+The official download links of SWarp are currently dead.
+For MacOS users, check [[./arx][here]] to download the latest version 2.38.0
+*** [[https://github.com/kxxdhdn/laputan/tree/main/swing][SwING]]
+Required by the synthetic photometry module.
 ** User guides
-- [[./jnum][jnum: Jupyter Notebook User Manual]]
-- [[./uc][uc: User Cases]]
-- A built-in helpdesk can be called interactively by ~help(target_func)~
-** Contact
-dangning.hu@outlook.com
+- [[./jnum][man: IPython Notebook User Manual]]
+- [[./uc][cas: Use Cases]]
+- A built-in helpdesk: ~help(target_func)~
+** Troubleshooting
+*** Known issues
 * Attribution
 :PROPERTIES:
 :UNNUMBERED:
 :END:
-Open access with the 3-Clause BSD License (see ~./LICENSE~)
+Open access with the 3-Clause BSD License
 * Version Log
 :PROPERTIES:
 :UNNUMBERED:
 :END:
-** v2.2.2 (20220xxx)
+** v2.2.2 (20220822)
 - JWST data support
   + [[https://jwst-docs.stsci.edu/understanding-jwst-data-files/jwst-data-formats][JWST Data Formats]]
-    * FITS
-    * ASDF
-    * ECSV
-  + Wrapped ~specutils~ and ~photutils~ for FITS IO
-- Moved ~tests/use_cases/~ to ~uc/~
-- Added jupyter notebook user manual (~jnum~)
+    * FITS (updated ~inout~)
+    * ASDF (not concerned)
+    * ECSV (not concerned)
+  + Wrapping ~specutils~ and ~photutils~
+- Renamed ~utilities~ to ~utbox~
+  + Added the French strike module (\copy F. Galliano)
+- Renamed ~arrays~ to ~latte~
+- Renamed ~calib~ to ~instr~
+- Splitted ~astrom~
+  + ~inout~: ~get_cd~, ~get_pc~ and ~patch_wcs_3D~ (former ~fixwcs~)
+  + ~maths~: others
+- Splitted ~imaging~
+  + ~instr~: 
+  + ~impro~: others
+- ~plots.plotool~
+  + Fixed issue in ~append_handles~ when adding legend for the same axis
+- Moved ~tests/use_cases/~ to ~cas/~
+- Created IPython Notebook user manual (~man/~)
+  + Added ~utbox.codefold~ (\copy Damian Kao)
+  + Removed ~tests/~
+- Updated dependencies
+  + python: >=3.6 \rarr >=3.8
+  + astropy: >=5.1
+  + photutils, specutils, colorama
+  + [Optional] ipython, jupyter
 ** v2.2.1 (20220616)
 - ~plots.plotool~
   + Fixed labels for ~reset_handles~

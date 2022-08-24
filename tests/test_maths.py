@@ -16,10 +16,10 @@ import matplotlib.pyplot as plt
 
 ## Local
 sys.path.insert(0, testdir+'/..') ## rapyuta path
-from rapyuta.maths import (f_lin, f_lin1, f_lin0,
-	                          gaussian, gaussian2D,
-                              rms, nanrms, std, nanstd,
-                              nanavg, bsplinterpol, )
+from rapyuta.maths import ( f_lin, f_lin1, f_lin0,
+	                    gaussian, gaussian2D,
+                            rms, nanrms, std, nanstd,
+                            nanavg, bsplinterpol, )
 
 x0 = np.arange(-5., 5., .5)
 rand = np.random.uniform(-1., 1., 20)

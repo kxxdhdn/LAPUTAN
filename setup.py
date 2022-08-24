@@ -15,10 +15,13 @@ setup(
         'Tests': 'https://github.com/kxxdhdn/RAPYUTA/tree/main/tests',
     },
 
-    python_requires='>=3.6',
+    python_requires='>=3.8',
     install_requires = [
         'numpy', 'scipy', 'matplotlib', 
-        'astropy', 'reproject>=0.7.1', 'h5py', 'tqdm', 
+        'astropy>=5.1', 'reproject>=0.7.1',
+        'photutils', 'specutils',
+        'h5py', 'tqdm', 'colorama',
+        # 'ipython', 'jupyter',
     ],
     classifiers=[
         'Programming Language :: Python :: 3',

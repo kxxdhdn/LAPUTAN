@@ -1,0 +1,12 @@
+astropy
+colorama
+h5py
+ipython
+jupyter
+matplotlib
+numpy
+photutils
+reproject
+scipy
+specutils
+tqdm

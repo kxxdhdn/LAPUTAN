@@ -56,7 +56,7 @@
   + [VITAL] Reported wrong ~ispec~ in ~spec_build~ in former version
 - Updated tests
 ** v2.0.1 (20210916)
-- Imported error ellipse support from a marvelous Python library of F. Galliano
+- Imported error ellipse support from a marvelous Python library of \copy F. Galliano
   + ~arrays~: ~arrayize~, ~ramp~
   + ~plots~: ~plotrange~, ~Btau~, ~Ctau~, ~ellipse~ and ~SUE~
   + ~plots.plotool~: ~eplot~

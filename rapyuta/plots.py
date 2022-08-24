@@ -3,16 +3,16 @@
 
 """
 
-Plots
+Visualization
 
     plotrange, Btau, Ctau, ellipse, SUE
     plotool:
-        set_clib, set_fig, set_ax, 
+        set_autocol, set_fig, set_ax, 
         reset_handles, append_handles, get_handles, set_legend, 
         plot, eplot, save, show, close,
         transData2Axes, transData2Figure, transAxes2Data, transAxes2Figure,
     pplot(plotool):
-        add_plot, add_legend
+        add_plot
 
 """
 
@@ -31,11 +31,53 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 ## Local
-from utilities import InputError, merge_aliases
-from arrays import arrayize, ramp
+import utbox as UT
+import latte as LA
 
 # cmap = mpl.cm.viridis
 # norm = mpl.colors.Normalize(vmin=0, vmax=1)
+
+##----------------
+## fmt specifiers
+##----------------
+# ''        default
+# 'none'    no data markers
+
+# '-'       solid line style
+# '--'      dashed line style
+# '-.'      dash-dot line style
+# ':'       dotted line style
+# '.'       point marker
+# ','       pixel marker
+# 'o'       circle marker
+# 'v'       triangle_down marker
+# '^'       triangle_up marker
+# '<'       triangle_left marker
+# '>'       triangle_right marker
+# '1'       tri_down marker
+# '2'       tri_up marker
+# '3'       tri_left marker
+# '4'       tri_right marker
+# 's'       square marker
+# 'p'       pentagon marker
+# '*'       star marker
+# 'h'       hexagon1 marker
+# 'H'       hexagon2 marker
+# '+'       plus marker
+# 'x'       x marker
+# 'D'       diamond marker
+# 'd'       thin_diamond marker
+# '|'       vline marker
+# '_'       hline marker
+
+# ‘b’     blue
+# ‘g’     green
+# ‘r’     red
+# ‘c’     cyan
+# ‘m’     magenta
+# ‘y’     yellow
+# ‘k’     black
+# ‘w’     white
 
 
 ##------------------------------
@@ -44,7 +86,7 @@ from arrays import arrayize, ramp
 def plotrange(x,y,xran=None,yran=None,xlog=False,ylog=False,mask=None, \
               errx=None,erry=None,xisln=False,yisln=False):
     '''
-    Automatically sets the x and y ranges for (X,Y) plots, based on the entered
+    Setting the x and y ranges for (X,Y) plots, based on the entered
     data set.
 
     Copyright: F. Galliano
@@ -53,18 +95,21 @@ def plotrange(x,y,xran=None,yran=None,xlog=False,ylog=False,mask=None, \
     # Check the imput
     N = np.size(x)
     if (np.size(y) != N):
-        UT.strike('plotrange','x and y should have the same size.')
-    xran = arrayize(xran,N=2)
-    yran = arrayize(yran,N=2)
+        UT.strike('plotrange','x and y should have the same size.',
+                  cat='InputError')
+    xran = LA.arrayize(xran,N=2)
+    yran = LA.arrayize(yran,N=2)
 
     # X error bar settings
     if errx is not None:
         if (np.isscalar(errx)): errx = np.array([errx])
         sex = np.shape(errx)
         if (len(sex) == 2):
-            if (sex != (2,N) ): UT.strike('plotrange','wrong size for errx.')
+            if (sex != (2,N) ): UT.strike('plotrange','wrong size for errx.',
+                                          cat='InputError')
         elif (len(sex) == 1):
-            if (sex != (N,) ): UT.strike('plotrange','wrong size for errx.')
+            if (sex != (N,) ): UT.strike('plotrange','wrong size for errx.',
+                                         cat='InputError')
             errx = np.array([errx,errx])
     else:
         errx = np.zeros((2,N))
@@ -74,9 +119,11 @@ def plotrange(x,y,xran=None,yran=None,xlog=False,ylog=False,mask=None, \
         if (np.isscalar(erry)): erry = np.array([erry])
         sey = np.shape(erry)
         if (len(sey) == 2):
-            if (sey != (2,N) ): UT.strike('plotrange','wrong size for erry.')
+            if (sey != (2,N) ): UT.strike('plotrange','wrong size for erry.',
+                                          cat='InputError')
         elif (len(sey) == 1):
-            if (sey != (N,) ): UT.strike('plotrange','wrong size for erry.')
+            if (sey != (N,) ): UT.strike('plotrange','wrong size for erry.',
+                                         cat='InputError')
             erry = np.array([erry,erry])
     else:
         erry = np.zeros((2,N))
@@ -92,7 +139,7 @@ def plotrange(x,y,xran=None,yran=None,xlog=False,ylog=False,mask=None, \
     if (yisln): ylow, yhigh = np.exp(ylow), np.exp(yhigh)
     
     # Mask
-    mask = arrayize(mask,default=True,N=N)
+    mask = LA.arrayize(mask,default=True,N=N)
     if (xlog): mask = ( mask & (xlow > 0) & (xhigh > 0) )
     if (ylog): mask = ( mask & (ylow > 0) & (yhigh > 0) )
     if (xran[0] != None): mask = ( mask & (xlow >= xran[0]) )
@@ -160,7 +207,7 @@ def ellipse(xmean=None,ymean=None,xstdev=None,ystdev=None,rho=None, \
         ellipse(xmean=mean_of_lnx,ymean=mean_of_y,xstdev=stdev_of_lnx, \
                 ystdev=stdev_of_y,rho=correl_coeff_of_lnx_and_y,xisln=True)
     """
-    x = ramp(x0=xmean-xstdev*(1-1.E-5),x1=xmean+xstdev*(1-1.E-5),N=Npt)
+    x = LA.ramp(x0=xmean-xstdev*(1-1.E-5),x1=xmean+xstdev*(1-1.E-5),N=Npt)
     c1 = rho * (x-xmean)/xstdev
     c2 = np.sqrt( (1-rho**2) * (1-(x-xmean)**2/xstdev**2) )
     y1 = ystdev * ( c1 - c2 ) + ymean
@@ -205,7 +252,7 @@ def SUE(xmean=None,ymean=None,xstdev=None,ystdev=None,rho=None, \
     theta = 1./2 * np.arctan( 2*rho*xstdev*ystdev / (xstdev**2-ystdev**2) )
 
     # Numerically solve for taux and tauy (tau=1.D2 ==> skew=0.99)
-    taugrid = ramp(N=10000,x0=1.E-2,x1=1.E2,log=True)
+    taugrid = LA.ramp(N=10000,x0=1.E-2,x1=1.E2,log=True)
     Ax = np.sqrt(np.pi/2) \
        * ( (np.cos(theta))**3*xskew*xstdev**3 \
          + (np.sin(theta))**3*yskew*ystdev**3 ) \
@@ -248,25 +295,25 @@ def SUE(xmean=None,ymean=None,xstdev=None,ystdev=None,rho=None, \
     yell_ax2 = np.zeros(2)
     for k in np.arange(4):
         if (k == 0):
-            xell_sub = ramp(N=Npt,x0=-lambdax,x1=0) + x0
+            xell_sub = LA.ramp(N=Npt,x0=-lambdax,x1=0) + x0
             rx = 1-(xell_sub-x0)**2/lambdax**2
             yell_sub = np.zeros(Npt)
             yell_sub[rx >= 0] = -lambday * np.sqrt(rx[rx >= 0]) + y0
             yell_sub[rx < 0] = np.nan
         elif (k == 1):
-            xell_sub = ramp(N=Npt,x0=0,x1=lambdax*taux) + x0
+            xell_sub = LA.ramp(N=Npt,x0=0,x1=lambdax*taux) + x0
             rx = 1-(xell_sub-x0)**2/lambdax**2/taux**2
             yell_sub = np.zeros(Npt)
             yell_sub[rx >= 0] = -lambday * np.sqrt(rx[rx >= 0]) + y0
             yell_sub[rx < 0] = np.nan
         elif (k == 2):
-            xell_sub = (ramp(N=Npt,x0=0,x1=lambdax*taux))[::-1] + x0
+            xell_sub = (LA.ramp(N=Npt,x0=0,x1=lambdax*taux))[::-1] + x0
             rx = 1-(xell_sub-x0)**2/lambdax**2/taux**2
             yell_sub = np.zeros(Npt)
             yell_sub[rx >= 0] = lambday*tauy * np.sqrt(rx[rx >= 0]) + y0
             yell_sub[rx < 0] = np.nan
         elif (k == 3):
-            xell_sub = (ramp(N=Npt,x0=-lambdax,x1=0))[::-1] + x0
+            xell_sub = (LA.ramp(N=Npt,x0=-lambdax,x1=0))[::-1] + x0
             rx = 1-(xell_sub-x0)**2/lambdax**2
             yell_sub = np.zeros(Npt)
             yell_sub[rx >= 0] = lambday*tauy * np.sqrt(rx[rx >= 0]) + y0
@@ -348,8 +395,10 @@ class plotool:
         ## INPUTS
         self.figid = 0
         self.horder = 0
-        self.handles = []
-        self.labels = []
+        self.handles, self.labels = [], []
+        ## handle archives are reserved for operations within the same axis
+        ## see append_handles (reset)
+        self.handles_arx, self.labels_arx = [], []
         self.legend = None
         self.trans = 'Axes'
         self.x = x
@@ -373,17 +422,17 @@ class plotool:
 
         self.ax = self.axes[0,0]
 
-    def set_clib(self, clib):
-        if clib=='base':
-            self.clib = list(mplc.BASE_COLORS) # 8 colors
-        elif clib=='tableau':
-            self.clib = list(mplc.TABLEAU_COLORS) # 10 colors
-        elif clib=='ccs4' or clib=='x11':
-            self.clib = list(mplc.CSS4_COLORS)
-        elif clib=='xkcd':
-            self.clib = list(mplc.XKCD_COLORS)
+    def set_autocol(self, autocol):
+        if autocol=='base':
+            self.autocol = list(mplc.BASE_COLORS) # 8 colors
+        elif autocol=='tableau':
+            self.autocol = list(mplc.TABLEAU_COLORS) # 10 colors
+        elif autocol=='ccs4' or autocol=='x11':
+            self.autocol = list(mplc.CSS4_COLORS)
+        elif autocol=='xkcd':
+            self.autocol = list(mplc.XKCD_COLORS)
         else:
-            self.clib = clib
+            self.autocol = autocol
         
     def set_fig(self, left=None, right=None, bottom=None, top=None,
                 wspace=None, hspace=None, title=None, tsize=None):
@@ -512,27 +561,38 @@ class plotool:
 
     def reset_handles(self):
         '''
-        Reset handles (before plot with new legend)
+        Reset handles for a new axis (before plot with new legend)
         '''
         if self.trans=='Figure':
             self.fig.add_artist(self.legend)
         elif self.trans=='Axes' or self.trans=='Data':
             self.ax.add_artist(self.legend)
-        self.handles = []
-        self.labels = []
+        self.handles, self.labels = [], []
+        self.handles_arx, self.labels_arx = [], []
         self.horder = 0
 
         return self.handles
 
-    def append_handles(self):
+    def append_handles(self, reset=False):
         '''
         Append currently added handle (after plot)
+
+        ------ INPUT ------
+        reset               used in the cases when not changing axis
+                              (must NOT used reset_handles before)
+                              cf. reset_handles: changing axis
         '''
         handles, labels = self.ax.get_legend_handles_labels()
+        if reset:
+            self.handles_arx.extend(self.handles)
+            self.labels_arx.extend(self.labels)
+            self.handles, self.labels = [], []
         for handle, label in zip(handles, labels):
-            if label not in self.labels:
+            if label not in self.labels_arx:
                 self.handles.append(handle)
                 self.labels.append(label)
+                self.handles_arx.append(handle)
+                self.labels_arx.append(label)
                 self.horder += 1
 
         return self.handles
@@ -691,8 +751,8 @@ class plotool:
 
             self.legend = self.ax.legend(handles=handles, loc=loc, **kwargs)
         else:
-            raise InputError('<plotool.set_legend>',
-                             'Non-recognized transformation!')
+            UT.strike('plotool.set_legend', 'non-recognized transformation.',
+                      cat='InputError')
 
         if figtight:
             self.fig.tight_layout()
@@ -719,8 +779,8 @@ class plotool:
             ## else: keep current self.ax (Default: (0,0))
 
         ## Keyword aliases
-        ec = merge_aliases(None, ecolor=ecolor, ec=ec)
-        elw = merge_aliases(None, elinewidth=elinewidth, elw=elw)
+        ec = UT.merge_aliases(None, ecolor=ecolor, ec=ec)
+        elw = UT.merge_aliases(None, elinewidth=elinewidth, elw=elw)
         
         if x is None:
             x = self.x
@@ -801,17 +861,17 @@ class plotool:
             ## else: keep current self.ax (Default: (0,0))
             
         ## kw aliases
-        ec = merge_aliases(None, edgecolor=edgecolor, ecolor=ecolor, ec=ec)
-        elw = merge_aliases(None, elinewidth=elinewidth, elw=elw)
-        els = merge_aliases(None, elinestyle=elinestyle, els=els)
-        efc = merge_aliases(None, efillcolor=efillcolor, efc=efc)
+        ec = UT.merge_aliases(None, edgecolor=edgecolor, ecolor=ecolor, ec=ec)
+        elw = UT.merge_aliases(None, elinewidth=elinewidth, elw=elw)
+        els = UT.merge_aliases(None, elinestyle=elinestyle, els=els)
+        efc = UT.merge_aliases(None, efillcolor=efillcolor, efc=efc)
         
         ## Central values
-        xp, N = arrayize(x)
-        yp = arrayize(y,N=N)
+        xp, N = LA.arrayize(x)
+        yp = LA.arrayize(y,N=N)
         if (N != np.size(yp)):
-            raise InputError('<plotool.eplot>',
-                             'x and y must have the same size.')
+            UT.strike('plotool.eplot', 'x and y must have the same size.',
+                      cat='InputError')
             
         ## Ellipse/SUE
         ell = (rho is not None)
@@ -826,12 +886,12 @@ class plotool:
             sex = np.shape(sigmax)
             if (len(sex) == 2):
                 if (sex != (2,N) ):
-                    raise InputError('<plotool.eplot>',
-                                     'wrong size for errx.')
+                    UT.strike('plotool.eplot', 'wrong size for errx.',
+                              cat='InputError')
             elif (len(sex) == 1):
                 if (sex != (N,) ):
-                    raise InputError('<plotool.eplot>',
-                                     'wrong size for errx.')
+                    UT.strike('plotool.eplot', 'wrong size for errx.',
+                              cat='InputError')
                 sigmax = np.array([sigmax,sigmax])
 
         ## Y error bar settings
@@ -842,19 +902,19 @@ class plotool:
             sey = np.shape(sigmay)
             if (len(sey) == 2):
                 if (sey != (2,N) ):
-                    raise InputError('<plotool.eplot>',
-                                     'wrong size for erry.')
+                    UT.strike('plotool.eplot', 'wrong size for erry.',
+                              cat='InputError')
             elif (len(sey) == 1):
                 if (sey != (N,) ):
-                    raise InputError('<plotool.eplot>',
-                                     'wrong size for erry.')
+                    UT.strike('plotool.eplot', 'wrong size for erry.',
+                              cat='InputError')
                 sigmay = np.array([sigmay,sigmay])
         
         if (ell):
             ## Setting the error bars and the potential lower/upper limits
             if (not uncx or not uncy):
-                raise InputError('<plotool.eplot>',
-                                 'for ellipses, both x and y errors must be set.')
+                UT.strike('plotool.eplot', 'both x and y errors must be set for ellipses.',
+                          cat='InputError')
             xcenell = xp.copy()
             xerr = sigmax[0,:]
             if (xisln):
@@ -878,28 +938,28 @@ class plotool:
             ycenell = ycenell[mask]
             xerr = xerr[mask]
             yerr = yerr[mask]
-            rho = arrayize(rho,N=N)
+            rho = LA.arrayize(rho,N=N)
             rho = rho[mask]
             if (skewll):
-                gammax = arrayize(gammax,N=N)
-                gammay = arrayize(gammay,N=N)
+                gammax = LA.arrayize(gammax,N=N)
+                gammay = LA.arrayize(gammay,N=N)
                 gammax = gammax[mask]
                 gammay = gammay[mask]
 
             ## Lines
-            elw = arrayize(elw,N=N)
+            elw = LA.arrayize(elw,N=N)
             elw = elw[mask]
-            els = arrayize(els,N=N)
+            els = LA.arrayize(els,N=N)
             els = els[mask]
 
             ## Colors
-            efill = arrayize(efill,N=N)
+            efill = LA.arrayize(efill,N=N)
             if ec is None:
                 ec = np.array(['b' for i in range(N)])
                 efc = np.array(['lightblue' for i in range(N)])
             else:
-                ec = arrayize(ec,N=N)
-                efc = arrayize(efc,N=N)
+                ec = LA.arrayize(ec,N=N)
+                efc = LA.arrayize(efc,N=N)
             ec = ec[mask]
             efc = efc[mask]
 
@@ -909,7 +969,7 @@ class plotool:
             elif (not ehatch):
                 ehatch = np.array(['' for i in np.arange(N)])
             else:
-                ehatch = arrayize(ehatch,default='',N=N)
+                ehatch = LA.arrayize(ehatch,default='',N=N)
             ehatch = ehatch[mask]
             nothatched = (ehatch == '')
             efill = np.logical_or(efill,(ehatch != ''))
@@ -1076,22 +1136,22 @@ class pplot(plotool):
                  loc=None, legendsize=15, legendalpha=1,
                  anchor=None, figtight=False,
                  ## Other kw
-                 clib='base', c=None, **kwargs):
+                 autocol='base', c=None, **kwargs):
         super().__init__(figsize=figsize, figint=figint, x=x, y=y)
 
         self.pltid = 0
 
         ## Keyword aliases
         ## Note that ec and ecolor are shared by plot (errorbar) and eplot (ellipse)
-        ec = merge_aliases('grey', edgecolor=edgecolor, ecolor=ecolor, ec=ec) # Default: 'grey'
-        elw = merge_aliases(None, elinewidth=elinewidth, elw=elw)
-        els = merge_aliases(None, elinestyle=elinestyle, els=els)
-        efc = merge_aliases(None, efillcolor=efillcolor, efc=efc)
+        ec = UT.merge_aliases('grey', edgecolor=edgecolor, ecolor=ecolor, ec=ec) # Default: 'grey'
+        elw = UT.merge_aliases(None, elinewidth=elinewidth, elw=elw)
+        els = UT.merge_aliases(None, elinestyle=elinestyle, els=els)
+        efc = UT.merge_aliases(None, efillcolor=efillcolor, efc=efc)
 
         ## Auto color
-        self.set_clib(clib)
-        if c is None:
-            c = self.clib[self.pltid]
+        self.set_autocol(autocol)
+        if c=='auto':
+            c = self.autocol[self.pltid]
 
         ## set_fig
         self.set_fig(left=left, bottom=bottom, right=right, top=top,
@@ -1187,16 +1247,16 @@ class pplot(plotool):
 
         ## Keyword aliases
         ## Note that ec and ecolor are shared by plot (errorbar) and eplot (ellipse)
-        ec = merge_aliases('grey', edgecolor=edgecolor, ecolor=ecolor, ec=ec) # Default: 'grey'
-        elw = merge_aliases(None, elinewidth=elinewidth, elw=elw)
-        els = merge_aliases(None, elinestyle=elinestyle, els=els)
-        efc = merge_aliases(None, efillcolor=efillcolor, efc=efc)
+        ec = UT.merge_aliases('grey', edgecolor=edgecolor, ecolor=ecolor, ec=ec) # Default: 'grey'
+        elw = UT.merge_aliases(None, elinewidth=elinewidth, elw=elw)
+        els = UT.merge_aliases(None, elinestyle=elinestyle, els=els)
+        efc = UT.merge_aliases(None, efillcolor=efillcolor, efc=efc)
 
         ## Auto color
-        if self.pltid==len(self.clib):
+        if self.pltid==len(self.autocol):
             self.pltid = 0
-        if c is None:
-            c = self.clib[self.pltid]
+        if c=='auto':
+            c = self.autocol[self.pltid]
         
         if x is None:
             x = self.x
@@ -1209,7 +1269,9 @@ class pplot(plotool):
 
         ## plot
         if addlegend:
-            self.reset_handles()
+            ## The reset kw of append_handles must NOT used with
+            ## reset_handles at the same time!
+            # self.reset_handles()
             self.loc = loc
             self.legendsize = legendsize
             self.anchor = anchor
@@ -1224,14 +1286,14 @@ class pplot(plotool):
                       fmt=fmt, ec=ec, elw=elw, els=els, # errorbar kw
                       capsize=capsize, barsabove=barsabove, # errorbar kw
                       c=c, alpha=alpha, label=label, **kwargs)
-            self.append_handles()
+            self.append_handles(reset=False)
             
         else:
 
             self.plot(x=x, y=y, xisln=xisln, yisln=yisln,
                       fmt=fmt, c=c, alpha=alpha,
                       label=label, **kwargs)
-            self.append_handles()
+            self.append_handles(reset=False)
             ## Ellipse errors
             self.eplot(x=x, y=y, mask=mask,
                        xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax,

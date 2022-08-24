@@ -5,20 +5,33 @@
 
 Input & Output
 
-    fclean, write_fits, read_fits, write_hdf5, read_hdf5,
+    fclean, write_fits, read_fits,
+    arr2tab, tab2arr, get_cd, get_pc, patch_wcs_3D,
+    write_hdf5, read_hdf5,
     write_ascii, read_ascii, write_csv, read_csv
+
+    fitsext, h5ext, ascext, csvext, savext
 
 """
 
 import sys, logging
+## Hide FITSFixedWarning:
+## Removed redundant SCAMP distortion parameters
+## because SIP parameters are also present [astropy.wcs.wcs]
 logging.disable(sys.maxsize)
 
 import subprocess as SP
+from pathlib import Path
+import warnings
+
 import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 import h5py as H5
 import csv
+
+## Local
+import utbox as UT
 
 global fitsext, h5ext, ascext, csvext, savext
 fitsext = '.fits'
@@ -27,24 +40,35 @@ ascext = '.txt'
 csvext = '.csv'
 savext = '.sav'
 
-def fclean(file, *alert):
+def fclean(fname, *alert):
     '''
-    Clean folder/files
+    Clean folder/file
+
     '''
-    SP.call('rm -rf '+file, shell=True)
+    SP.call('rm -rf '+fname, shell=True)
     for text in alert:
         print(text)
 
-def write_fits(file, header, data, wave=None, wmod=0, **hdrl):
+
+##------------------------------------------------
+##
+##     Flexible Image Transport System (FITS)
+##
+##------------------------------------------------
+
+def write_fits(fname, header, data,
+               wave=None, wmod=0, header_w=None,
+               ext=fitsext, **hdrl):
     '''
     Write fits file
 
     ------ INPUT ------
-    file                output FITS filename
+    fname               output FITS filename
     header              header of primary HDU
     data                data in primary HDU
     wave                data in table 1 (ndarray. Default: None)
     wmod                wave table format (0 - Image; 1 - BinTable. Default: 0)
+    header_w            header of WAVE-TAB
     ------ OUTPUT ------
     '''
     for key, value in hdrl.items():
@@ -57,40 +81,42 @@ def write_fits(file, header, data, wave=None, wmod=0, **hdrl):
         ## Convert wave format
         if isinstance(wave, fits.fitsrec.FITS_rec):
             if wmod==0:
-                wave = wave[0][0][:,0]
+                wave = tab2arr(wave)
         else:
             Nw = len(wave)
             if wmod==1:
-                wave = np.array(wave).reshape((Nw,1))
-                col = fits.Column(array=[wave], format=str(Nw)+'E',
-                                  name='WAVE-TAB', unit='um', dim='(1,{})'.format(Nw))
-                tab = fits.BinTableHDU.from_columns([col], name='WCS-TAB ')
-                wave = tab.data
+                wave = arr2tab(wave, header=header_w)
         ## Create table
         if wmod==0:
-            hdu = fits.ImageHDU(data=wave, name='WAVE-TAB')
+            hdu = fits.ImageHDU(data=wave, header=header_w, name='WAVE-TAB')
         elif wmod==1:
-            hdu = fits.BinTableHDU(data=wave, name='WCS-TAB ')
+            hdu = fits.BinTableHDU(data=wave, header=header_w, name='WCS-TAB ')
 
         hdul.append(hdu)
 
-    hdul.writeto(file+fitsext, overwrite=True)
+    hdul.writeto(fname+ext, overwrite=True)
     
-def read_fits(file, file_unc=None, wmod=0):
+def read_fits(fname, wmod=0, instr=None,
+              file_unc=None, ext=fitsext):
     '''
     Read fits file (auto detect dim)
 
     ------ INPUT ------
-    file                input FITS filename
-    file_unc            input uncertainty file
+    fname               input FITS filename
     wmod                output wave mode (Default: 0)
                           0 - 1darray; 
                           1 - FITS_rec.
+    instr               data format depends on instruments (Default: None)
+                          None - primary array contain primary data;
+                          'jwst' - JWST data format
+    file_unc            unc filename (Default: None)
+                          None - auto detection (ext should be fitsext)
     ------ OUTPUT ------
     ds                  output dataset
-      header              header of primary HDU
-      data                data in primary HDU
-      header_w            header of W-TAB
+      HDUL                header data unit list
+      header              header of data HDU
+      data                data in data HDU
+      header_w            header of WAVE-TAB
       wave                data in table 1 (None if does not exist)
       unc                 uncertainty array
     '''
@@ -100,54 +126,279 @@ def read_fits(file, file_unc=None, wmod=0):
     ds.wave = None
     ds.unc = None
     
-    ## Read header & data
-    with fits.open(file+fitsext) as hdul:
+    with fits.open(fname+ext) as hdul:
         ds.HDUL = hdul
-        hdr = hdul[0].header
-        ds.data = hdul[0].data
-        ds.header = hdr
-        try:
-            ds.wcs = WCS(hdr)
-        except:
-            ds.wcs = WCS(None)
-            # print('Not supported WCS (probably with 3D SIP distortion), use astrom.fixwcs')
+        if instr=='jwst':
+            ## Read header & data
+            hdr = hdul[1].header
+            ds.data = hdul[1].data
 
-        ## Read wavelength
-        if len(hdul)==2:
-            ds.header_w = hdul[1].header
-            wave = hdul[1].data
+            ## JWST cubes have no ready-made WAVE-TAB
+            if hdr['NAXIS']==3:
+               w0 = hdr['CRVAL3']
+               dw = hdr['CDELT3']
+               wave = []
+               for iw in range(hdr['NAXIS3']):
+                   wave.append(w0+iw*dw)
+               Nw = len(wave)
+               if wmod==0:
+                   wave = np.array(wave)
+               elif wmod==1:
+                   wave = arr2tab(wave, header=ds.header_w)
 
-            if isinstance(hdul[1], fits.BinTableHDU):
-                if wmod==0:
-                    wave = wave[0][0][:,0] ## Convert FITS_rec to 1darray
-            elif isinstance(hdul[1], fits.ImageHDU):
-                Nw = len(wave)
-                if wmod==1:
-                    wave = np.array(wave).reshape((Nw,1))
-                    col = fits.Column(array=[wave], format=str(Nw)+'E',
-                                      name='WAVE-TAB', unit='um', dim='(1,{})'.format(Nw))
-                    tab = fits.BinTableHDU.from_columns([col], name='WCS-TAB ')
-                    wave = tab.data
+            ## Uncertainties
+            ds.unc = hdul[2].data
+
+        else:
+            ## Read header & data
+            hdr = hdul[0].header
+            ds.data = hdul[0].data
+
+            ## Read wavelength
+            if len(hdul)==2:
+                ds.header_w = hdul[1].header
+                wave = hdul[1].data
+
+                if isinstance(hdul[1], fits.BinTableHDU):
+                    if wmod==0:
+                        wave = tab2arr(wave) ## Convert FITS_rec to 1darray
+                elif isinstance(hdul[1], fits.ImageHDU):
+                    Nw = len(wave)
+                    if wmod==1:
+                        wave = arr2tab(wave, header=ds.header_w)
+
+            ## Uncertainties
+            if (file_unc is None) and ext==fitsext:
+                file_unc = fname+'_unc'+ext
+            if Path(file_unc).exists():
+                ## Read uncertainty data
+                with fits.open(file_unc) as hdul:
+                    ds.unc = hdul[0].data
+
+    ## WCS
+    try:
+        ds.wcs = WCS(hdr)
+    except:
+        ds.wcs = patch_wcs_3D(header=hdr, ext=fitsext)
+        warnings.warn('2D WCS extracted from 3D data! ')
+
+    ds.header = hdr
+    ds.wave = wave
             
-            ds.wave = wave
-    
-    if file_unc is not None:
-        ## Read uncertainty data
-        with fits.open(file_unc+fitsext) as hdul:
-            ds.unc = hdul[0].data
+    return ds
+
+def arr2tab(arr, header=None, unit='um'):
+    '''
+    Convert 1darray to FITS_rec
+    '''
+    N = len(arr)
+    arr = np.array(arr).reshape((N,1))
+    col = fits.Column(array=[arr], format=str(N)+'E',
+                      name='WAVE-TAB', unit=unit, dim='(1,{})'.format(N))
+    tab = fits.BinTableHDU.from_columns([col], header=header, name='WCS-TAB ')
+
+    return tab.data
+
+def tab2arr(tab):
+    '''
+    Convert FITS_rec to 1darray
+    '''
+    return tab[0][0][:,0]
+
+def get_cd(pc=None, cdelt=None, header=None, wcs=None):
+    '''
+    Convert CDELTia + PCi_ja to CDi_ja (2D only)
+    (astropy.wcs use PC/CDELT by default)
+
+    ------ INPUT ------
+    pc                  PC matrix (priority if co-exist)
+    cdelt               Coordinate increment at ref point
+    header              header object (2nd priority if co-exist)
+    wcs                 WCS object (3rd priority)
+    ------ OUTPUT ------
+    ds                  output object
+      cd                  CD matrix
+      pc                  PC matrix
+      cdelt               CDELTia
+    '''
+    ## Initialize output object
+    ds = type('', (), {})()
+    ds.cd = np.zeros((2,2))
+    ds.pc = np.zeros((2,2))
+    ds.cdelt = np.zeros(2)
+
+    if pc is not None and cdelt is not None:
+        ds.pc = pc
+        ds.cdelt = cdelt
+        ## CDi_j = PCi_j * CDELTi
+        ds.cd = ds.pc * ds.cdelt.reshape((2,1))
+    else:
+        if header is not None:
+            # w = WCS(header)
+            w = patch_wcs_3D(header=header).wcs # force 2D
+        else:
+            if wcs is not None:
+                w = wcs
+            else:
+                UT.strike('get_cd', 'no input.', cat='InputError')
+
+        ds.cd = w.pixel_scale_matrix
+
+        if w.wcs.has_pc():
+            ds.pc = w.wcs.get_pc()
+            ds.cdelt = w.wcs.get_cdelt()
+        else:
+            ## See astropy.wcs.utils.proj_plane_pixel_scales
+            ds.cdelt = np.sqrt((ds.cd**2).sum(axis=0, dtype=float))
+            ## See Calabretta&Greisen paper sec-6.2 [A&A 395, 1077-1122 (2002)]
+            ds.cdelt[0] = -ds.cdelt[0]
+            ds.pc = ds.cd / ds.cdelt.reshape((np.size(ds.cdelt),1))
 
     return ds
 
-def write_hdf5(file, name, data, group='/',
+def get_pc(cd=None, header=None, wcs=None):
+    '''
+    Convert CDi_ja to CDELTia + PCi_ja (2D only)
+
+    ------ INPUT ------
+    cd                  CD matrix (priority if co-exist)
+    header              header object (2nd priority if co-exist)
+    wcs                 WCS object (3rd priority)
+    ------ OUTPUT ------
+    ds                  output object
+      cd                  CD matrix
+      pc                  PC matrix
+      cdelt               CDELTia
+    '''
+    ## Initialize output object
+    ds = type('', (), {})()
+    ds.cd = np.zeros((2,2))
+    ds.pc = np.zeros((2,2))
+    ds.cdelt = np.zeros(2)
+
+    if cd is not None:
+        ds.cd = cd
+        ## See astropy.wcs.utils.proj_plane_pixel_scales
+        ds.cdelt = np.sqrt((cd**2).sum(axis=0, dtype=float))
+        ## See Calabretta&Greisen paper sec-6.2 [A&A 395, 1077-1122 (2002)]
+        ds.cdelt[0] = -ds.cdelt[0]
+        ## CDi_j = PCi_j * CDELTi
+        ds.pc = ds.cd / ds.cdelt.reshape((2,1))
+    else:
+        if header is not None:
+            # w = WCS(header)
+            w = patch_wcs_3D(header=header).wcs # force 2D
+        else:
+            if wcs is not None:
+                w = wcs
+            else:
+                UT.strike('get_pc', 'no input.', cat='InputError')
+
+        ds.cd = w.pixel_scale_matrix
+
+        if w.wcs.has_pc():
+            ds.pc = w.wcs.get_pc()
+            ds.cdelt = w.wcs.get_cdelt()
+        else:
+            ## See astropy.wcs.utils.proj_plane_pixel_scales
+            ds.cdelt = np.sqrt((ds.cd**2).sum(axis=0, dtype=float))
+            ## See Calabretta&Greisen paper sec-6.2 [A&A 395, 1077-1122 (2002)]
+            ds.cdelt[0] = -ds.cdelt[0]
+            ds.pc = ds.cd / ds.cdelt.reshape((np.size(ds.cdelt),1))
+
+    return ds
+
+def patch_wcs_3D(fname=None, header=None, del_kw=None, ext=fitsext):
+    '''
+    Auto-detect & reduce dim if WCS is 3D with distortion
+
+    ------ INPUT ------
+    fname               target FITS filename
+    header              header object
+    del_kw              kw to delete
+                          None: reduce dimension with naxis kwarg (Default)
+                          'all': All kw with the character "3"
+                          'sip': SIP kw
+    ------ OUTPUT ------
+    ds                  output object
+      header              header of primary HDU
+      wcs                 2D WCS
+      was3d               True: if input data is 3D
+    '''
+    ## Initialize output object
+    ds = type('', (), {})()
+    ds.wcs = WCS(None)
+    ds.header = None
+        
+    ## Read file/header
+    if fname is not None:
+        hdr = fits.open(fname+ext)[0].header
+        header = hdr.copy()
+    else:
+        if header is not None:
+            hdr = header.copy()
+        else:
+            UT.strike('patch_wcs_3D', 'no input.', cat='InputError')
+
+    if header['NAXIS']==3:
+        ds.was3d = True
+    else:
+        ds.was3d = False
+
+    ## Extract WCS from 3D data
+    if del_kw=='all':
+        ## Opt.1: delete keywords containing "3" (not recommanded)
+        for kw in hdr.keys():
+            if '3' in kw:
+                del header[kw]
+        header['NAXIS'] = 2
+        header['COMMENT'] = '3D WCS extraction: All keywords with the character "3" are deleted. '
+        
+        ds.wcs = WCS(header)
+    elif del_kw=='sip':
+        ## Opt.2: delete SIP keywords (not recommanded)
+        ## https://fits.gsfc.nasa.gov/registry/sip/SIP_distortion_v1_0.pdf
+        for kw in hdr.keys():
+            if ('A_' in kw) and (not 'PA' in kw) and (not 'RA' in kw):
+                del header[kw]
+            if ('B_' in kw) or ('AP_' in kw) or ('BP_' in kw):
+                del header[kw]
+        if 'CTYPE3' in hdr.keys():
+            del header['CTYPE3']
+        header['COMMENT'] = '3D WCS extraction: SIP keywords are deleted. '
+        
+        ds.wcs = WCS(header)
+    else:
+        ## Default: reduce dimension (default)
+        if 'CTYPE3' in hdr.keys():
+            del header['CTYPE3']
+        if 'NAXIS3' in hdr.keys():
+            del header['NAXIS3']
+        header['COMMENT'] = '3D WCS extraction: Shrink to 2D with naxis kwarg. '
+
+        ds.wcs = WCS(header, naxis=2)
+
+    ds.header = header
+
+    return ds
+
+
+##------------------------------------------------
+##
+##                     HDF5
+##
+##------------------------------------------------
+
+def write_hdf5(fname, name, data, group='/',
                ind1=None, ind2=None, ind3=None, ind4=None,
                ind5=None, ind6=None, ind7=None,
-               append=False, verbose=False):
+               append=False, verbose=False, ext=h5ext):
     '''
     Write dataset into a h5 file (a single name/data_array per time, dim < 7)
     Inspired by SwING inout library
 
     ------ INPUT ------
-    file                output h5 filename
+    fname               output h5 filename
     name                name of the dataset (len <= 80)
     data                dataset (dim < 7)
     group               name of the group (Default: '/')
@@ -159,9 +410,9 @@ def write_hdf5(file, name, data, group='/',
     ## Preliminaries
     ##---------------
     if (append):
-        hf = H5.File(file+h5ext, 'a')
+        hf = H5.File(fname+ext, 'a')
     else:
-        hf = H5.File(file+h5ext, 'w')
+        hf = H5.File(fname+ext, 'w')
     
     h5 = hf.require_group(group) # Default: group = '/'
 
@@ -198,7 +449,8 @@ def write_hdf5(file, name, data, group='/',
         createdset = True
         if (subarr):
             h5.close()
-            raise ValueError('Dataset does not exist')
+            UT.strike('write_hdf5', 'Dataset does not exist.',
+                      cat='InputError')
 
     ## Case 1: no dataset OR no subarr
     if (createdset):
@@ -289,23 +541,24 @@ def write_hdf5(file, name, data, group='/',
         if (append):
             if (subarr):
                 print('[write_hdf5] Dataset {}/{} in the file:'.format(group,name))
-                print('    ', file+h5ext, ' has been modified.')
+                print('    ', fname+ext, ' has been modified.')
             else:
                 print('[write_hdf5] Dataset {}/{} has been added in the file:'.format(group,name))
-                print('    ', file+h5ext, '.')
+                print('    ', fname+ext, '.')
         else:
             print('[write_hdf5] Dataset {}/{} has been written in the new file:'.format(group,name))
-            print('    ', file+h5ext, '.')
+            print('    ', fname+ext, '.')
 
-def read_hdf5(file, name, group='/',
+def read_hdf5(fname, name, group='/',
               ind1=None, ind2=None, ind3=None, ind4=None,
-              ind5=None, ind6=None, ind7=None):
+              ind5=None, ind6=None, ind7=None,
+              ext=h5ext):
     '''
     Read h5 file (a single name/data_array per time, dim < 7)
     Inspired by SwING inout library
 
     ------ INPUT ------
-    file                input h5 filename
+    fname               input h5 filename
     name                name of the dataset (len <= 80)
     group               name of the group (Default: '/')
     indx                array index ([idimx_inf,idimx_sup] or idimx if data is scalar, Default: None)
@@ -314,7 +567,7 @@ def read_hdf5(file, name, group='/',
     '''
     ## Preliminaries
     ##---------------
-    hf = H5.File(file+h5ext, 'r')
+    hf = H5.File(fname+ext, 'r')
     h5 = hf.require_group(group) # Default: group = '/'
 
     Ndim = h5[name].ndim
@@ -403,19 +656,25 @@ def read_hdf5(file, name, group='/',
 
     return dset
 
-def write_ascii(file, header=None, dset=None, trans=False,
-                ascext=ascext, append=False, comment=None):
+
+##------------------------------------------------
+##
+##                     ASCII
+##
+##------------------------------------------------
+
+def write_ascii(fname, header=None, dset=None, trans=False,
+                append=False, comment=None, ext=ascext):
     '''
     Write ASCII file
     Supported format: commented_header
     See also: astropy.io.ascii.write, numpy.savetxt
     
     ------ INPUT ------
-    file                input ASCII filename
+    fname               input ASCII filename
     header              data header
     dset                dataset (1darray[nrow], 2darray[nrow,ncol] or list)
     trans               transpose dset (Default: False)
-    ascext              ASCII file suffix (Default: '.txt')
     append              True: if not overwrite (Default: False)
     comment             single line comment on top
     ------ OUTPUT ------
@@ -425,7 +684,7 @@ def write_ascii(file, header=None, dset=None, trans=False,
     else:
         mod = 'w'
 
-    with open(file+ascext, mod) as f:
+    with open(fname+ext, mod) as f:
         pass
         ## Comment on the top
         ##--------------------
@@ -466,8 +725,8 @@ def write_ascii(file, header=None, dset=None, trans=False,
                     for i in range(nrow//500+1):
                         rows += str(darr[500*i:500*(i+1)]).replace('[','').replace(']','')+'\n'
             else:
-                raise ValueError(
-                    'Expected 1D or 2D array, got {}D array instead!'.format(Ndim))
+                UT.strike('write_ascii', f'Expected 1D or 2D array, got {Ndim:.d}D array instead.',
+                          cat='ValueError')
         ## Header
         ##--------
         hrow = ''
@@ -518,21 +777,20 @@ def write_ascii(file, header=None, dset=None, trans=False,
 
         f.write(fwrows)
 
-def read_ascii(file, ascext=ascext, dtype=str, start_header=-1):
+def read_ascii(fname, dtype=str, start_header=-1, ext=ascext):
     '''
     Read ASCII file
     Supported format: commented_header
     See also: astropy.io.ascii.read, numpy.genfromtxt
 
     ------ INPUT ------
-    file                input ASCII filename
-    ascext              ASCII file suffix (Default: '.txt')
+    fname               input ASCII filename
     dtype               data type (Default: 'str')
     start_header        line number of the header line (Default: -1)
     ------ OUTPUT ------
     dset                dataset (dict)
     '''
-    with open(file+ascext, 'r') as f:
+    with open(fname+ext, 'r') as f:
         ## f.read() -> str | f.readlines() -> list
         header = None
         darr = []
@@ -572,13 +830,13 @@ def read_ascii(file, ascext=ascext, dtype=str, start_header=-1):
 
     return dset
 
-def write_csv(file, header, dset, trans=False, append=False):
+def write_csv(fname, header, dset, trans=False, append=False, ext=csvext):
     '''
     Read fits file
     See also: astropy.io.ascii.write
 
     ------ INPUT ------
-    file                output csv filename
+    fname               output csv filename
     header              data labels in list('label1', 'label2', ...)
     dset                dataset (1darray[nrow], 2darray[nrow,ncol] or list)
     trans               transpose dset (Default: False)
@@ -590,7 +848,7 @@ def write_csv(file, header, dset, trans=False, append=False):
     else:
         mod = 'w'
 
-    with open(file+csvext, mod, newline='') as csvfile:
+    with open(fname+ext, mod, newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=header)
 
         ## Header
@@ -627,17 +885,17 @@ def write_csv(file, header, dset, trans=False, append=False):
             ## Write csv row
             writer.writerow(rows)
             
-def read_csv(file, *header):
+def read_csv(fname, ext=csvext, *header):
     '''
     Read csv file
 
     ------ INPUT ------
-    file                input csv filename
+    fname               input csv filename
     header              labels of data to read
     ------ OUTPUT ------
     dset                dataset (dict)
     '''
-    with open(file+csvext, 'r', newline='') as csvfile:
+    with open(fname+ext, 'r', newline='') as csvfile:
         dset = {}
         for h in header:
             csvfile.seek(0) # reset pointer
