@@ -8,7 +8,7 @@ This library consists of IDL routines used by ~rapyuta~, including the resolutio
 ~convolve_image.pro~ - core program ([[https://www.astro.princeton.edu/~draine/Kernels/convolve_image.pro][source]])
 ~conv_prog.pro~ - configuration file. 
 ~conv.pro~ - executable file.
-1. Download convolution kernels from [[https://www.astro.princeton.edu/~draine/Kernels/Kernels_2018/Kernel_FITS_Files/Hi_Resolution/][Index of /~ ~draine/Kernels/Kernels_2018/Kernel_FITS_Files/Hi_Resolution~ ]]
+1. Download convolution kernels from [[https://www.astro.princeton.edu/~draine/Kernels/Kernels_2018/Kernel_FITS_Files/Hi_Resolution/][Index of /~ draine/Kernels/Kernels_2018/Kernel_FITS_Files/Hi_Resolution]]
 2. Open ~convolve_image.pro~, search and modify: 
    - *~images_path~* (corresponding to ~convdir~ or the path of ~filIN~ if ~convdir=None~, images to convolve)
    - *~kernels_path~* (corresponding to the path of ~kfile~, convolution kernels)

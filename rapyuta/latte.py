@@ -5,7 +5,7 @@
 
 List, Array, Tuple, Table, Etc.
 
-    arrayize, listize, closest, ramp,
+    ramp, arrayize, listize, closest,
     pix2sup, sup2pix, 
 
 """
@@ -19,104 +19,11 @@ from astropy.table import Table
 import utbox as UT
 
 
-def arrayize(arr,N=None,default=None,NP=True,dtype=None):
-    '''
-    Transform scalar or list into a numpy array
-
-    Returns a numpy array or a list (if NP=False) whether the input is a scalar, 
-    a list or an array. If N is set to an integer and arr is a scalar, then the 
-    output is a size N array with the value arr at each element. If arr is None, 
-    then default is substituted.
-
-    Copyright: F. Galliano
-    '''
-    islist = isinstance(arr,list)
-    isdict = isinstance(arr,dict)
-    isnumpy = ( (not np.isscalar(arr)) and not islist and not isdict and \
-                not isinstance(arr,type(None)) )
-    arrout = arr
-    if (not islist and not isnumpy):
-        if (arrout == None): arrout = default
-        if (N != None):
-            if (np.size(arrout) == 1):
-                arrout = [arrout for i in np.arange(N)]
-            elif (np.size(arrout) != N):
-                UT.strike('arrayize', 'wrong size for default.',
-                          cat='InputError')
-        else:
-            arrout = [arrout]
-        if (NP): arrout = np.array(arrout,dtype=dtype)
-    elif (islist and NP):
-        arrout = np.array(arrout,dtype=dtype)
-    Nout = len(arrout)
-    if (N != None):
-        if (N != Nout):
-            UT.strike('arrayize', 'array is not of size N.',
-                          cat='InputError')
-        return(arrout)
-    else:
-        return(arrout,Nout)
-    
-def listize(arr):
-    '''
-    Convert any iterable to list object
-    worked for int, float, string, tuple, ndarray, list, dict, set, etc.
-    '''
-    if np.isscalar(arr):
-        listout = [arr] # scalar (string, int, float, etc.)
-    elif isinstance(arr, np.ndarray):
-        listout = arr.tolist() # ndarray
-    elif isinstance(arr, np.recarray):
-        listout = arr.tolist() # recarray
-    elif isinstance(arr, Table):
-        colnam = arr.colnames
-        listout = [dict(zip(colnam, row)) for row in arr]
-    else:
-        listout = list(arr) # others
-
-    return listout
-    
-def closest(arr, val, side=None):
-    '''
-    Return index of element in the array closest to a given value.
-    The input array can be unsorted with NaN values. 
-    However, if there are repeating elements, 
-    the smallest index of the same closest value will be returned.
-    If side is defined, while there are no qualified value in array,
-    InputError will be raised (strict criterion).
-
-    ------ INPUT ------
-    arr                 input array
-    val                 target value
-    side                nearest left or right side of target value (Default: None)
-    ------ OUTPUT ------
-    ind                 index of the closet value
-    '''
-    if side=='left':
-        arr2list = [x if x<=val else np.nan for x in arr]
-    elif side=='right':
-        arr2list = [x if x>=val else np.nan for x in arr]
-    else:
-        arr2list = list(arr)
-
-    ## The first element in min func must not be np.nan
-    if np.isnan(arr2list[0]):
-        arr2list[0] = np.inf
-    ## The min func uses key as iterable to calculate the min value,
-    ## then use the position of this value in key to display value in arr.
-    ## The index func reobtain (the index of) that position.
-    ## In this case, the input arr can be unsorted.
-    ind = arr2list.index(min(arr2list, key=lambda x:abs(x-val)))
-
-    if np.isinf(arr2list[ind]):
-        warnings.warn('side condition was ignored. ')
-        
-        arr2list = list(arr)
-        if np.isnan(arr2list[0]):
-            arr2list[0] = np.inf
-        ind =  arr2list.index(min(arr2list, key=lambda x:abs(x-val)))
-    
-    return ind
+##------------------------------------------------
+##
+##           (Copyright: F. Galliano)
+##
+##------------------------------------------------
 
 def ramp(x0=0,x1=1,dx=None,dlnx=None,dlogx=None,N=None,log=None, \
          homogenize=True):
@@ -187,6 +94,111 @@ def ramp(x0=0,x1=1,dx=None,dlnx=None,dlogx=None,N=None,log=None, \
         x = dindgen*(x1-x0) + x0
     return(x)
 
+def arrayize(arr,N=None,default=None,NP=True,dtype=None):
+    '''
+    Transform scalar or list into a numpy array
+
+    Returns a numpy array or a list (if NP=False) whether the input is a scalar, 
+    a list or an array. If N is set to an integer and arr is a scalar, then the 
+    output is a size N array with the value arr at each element. If arr is None, 
+    then default is substituted.
+
+    Copyright: F. Galliano
+    '''
+    islist = isinstance(arr,list)
+    isdict = isinstance(arr,dict)
+    isnumpy = ( (not np.isscalar(arr)) and not islist and not isdict and \
+                not isinstance(arr,type(None)) )
+    arrout = arr
+    if (not islist and not isnumpy):
+        if (arrout == None): arrout = default
+        if (N != None):
+            if (np.size(arrout) == 1):
+                arrout = [arrout for i in np.arange(N)]
+            elif (np.size(arrout) != N):
+                UT.strike('arrayize', 'wrong size for default.',
+                          cat='InputError')
+        else:
+            arrout = [arrout]
+        if (NP): arrout = np.array(arrout,dtype=dtype)
+    elif (islist and NP):
+        arrout = np.array(arrout,dtype=dtype)
+    Nout = len(arrout)
+    if (N != None):
+        if (N != Nout):
+            UT.strike('arrayize', 'array is not of size N.',
+                          cat='InputError')
+        return(arrout)
+    else:
+        return(arrout,Nout)
+
+
+##------------------------------------------------
+##
+##              Unsorted functions
+##
+##------------------------------------------------
+
+def listize(arr):
+    '''
+    Convert any iterable to list object
+    worked for int, float, string, tuple, ndarray, list, dict, set, etc.
+    '''
+    if np.isscalar(arr):
+        listout = [arr] # scalar (string, int, float, etc.)
+    elif isinstance(arr, np.ndarray):
+        listout = arr.tolist() # ndarray
+    elif isinstance(arr, np.recarray):
+        listout = arr.tolist() # recarray
+    elif isinstance(arr, Table):
+        colnam = arr.colnames
+        listout = [dict(zip(colnam, row)) for row in arr]
+    else:
+        listout = list(arr) # others
+
+    return listout
+    
+def closest(arr, val, side=None):
+    '''
+    Return index of element in the array closest to a given value.
+    The input array can be unsorted with NaN values. 
+    However, if there are repeating elements, 
+    the smallest index of the same closest value will be returned.
+    If side is defined, while there are no qualified value in array,
+    InputError will be raised (strict criterion).
+
+    ------ INPUT ------
+    arr                 input array
+    val                 target value
+    side                nearest left or right side of target value (Default: None)
+    ------ OUTPUT ------
+    ind                 index of the closet value
+    '''
+    if side=='left':
+        arr2list = [x if x<=val else np.nan for x in arr]
+    elif side=='right':
+        arr2list = [x if x>=val else np.nan for x in arr]
+    else:
+        arr2list = list(arr)
+
+    ## The first element in min func must not be np.nan
+    if np.isnan(arr2list[0]):
+        arr2list[0] = np.inf
+    ## The min func uses key as iterable to calculate the min value,
+    ## then use the position of this value in key to display value in arr.
+    ## The index func reobtain (the index of) that position.
+    ## In this case, the input arr can be unsorted.
+    ind = arr2list.index(min(arr2list, key=lambda x:abs(x-val)))
+
+    if np.isinf(arr2list[ind]):
+        warnings.warn('side condition was ignored. ')
+        
+        arr2list = list(arr)
+        if np.isnan(arr2list[0]):
+            arr2list[0] = np.inf
+        ind =  arr2list.index(min(arr2list, key=lambda x:abs(x-val)))
+    
+    return ind
 
 def pix2sup(x, xscale=1, x0=None, origin=0):
     '''

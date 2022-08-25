@@ -25,6 +25,13 @@ import utbox as UT
 ## Python string formatting
 ## https://pyformat.info
 
+
+##------------------------------------------------
+##
+##                Basic functions
+##
+##------------------------------------------------
+
 def f_lin(x, A, B):
     '''
     Y = A * x + B
@@ -54,6 +61,13 @@ def gaussian2D(x1, x2, mu1, mu2, sig1, sig2, A=1.):
     2D Gaussian function given iid variables x & y (and amplitude A)
     '''
     return A * np.exp(- (x1 - mu1)**2 / (2 * sig1**2) - (x2 - mu2)**2 / (2 * sig2**2))
+
+
+##------------------------------------------------
+##
+##               Basic statistics
+##
+##------------------------------------------------
 
 def rms(a, ddof=0):
     '''
@@ -169,6 +183,13 @@ def nanavg(a, axis=None, weights=None, MaskedValue=np.nan):
 
     return avg
 
+
+##------------------------------------------------
+##
+##               Unit conversions
+##
+##------------------------------------------------
+
 def pix2sr(X, CDELT):
     '''
     X pixel = Y sr
@@ -223,6 +244,13 @@ def deg2hour(ra, dec):
     # print('{:d}h{:d}m{:04.2f}s, {:d}d{:d}m{:04.2f}s'.format(h,m,s,deg,arcmin,arcsec))
 
     return h, m, s, deg, arcmin, arcsec
+
+
+##------------------------------------------------
+##
+##              Unsorted statistics
+##
+##------------------------------------------------
 
 def icorr2ij(Npar, icorr=None, upper=True):
     '''
@@ -312,6 +340,13 @@ def ij2icorr(Npar, i, j, verbose=False):
 
     ## Opt.2
     # return (i-1)*Npar - math.comb(i+1,2) + j
+
+
+##------------------------------------------------
+##
+##              Numerical analysis
+##
+##------------------------------------------------
 
 def bsplinterp(x, y, x0):
     '''

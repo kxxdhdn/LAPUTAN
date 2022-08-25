@@ -8,20 +8,21 @@ Utility box
     Error:
         InputError,
     strike, streplace_scl, streplace, tcolor, print_text
-    merge_aliases, is_different_value, codefold
+    getcfd, merge_aliases, is_different_value, codefold
 
-    rapyroot, term_width
+    term_width
 
 """
 
-import os, re, sys
+import inspect, os, re, sys
 from pathlib import Path
 import numpy as np
 import random
 from colorama import Fore, Back, Style
 from IPython.display import HTML, display
+import warnings
 
-global rapyroot, term_width
+from rapyuta import rapyroot
 
 ## https://stackoverflow.com/questions/15411967/how-can-i-check-if-code-is-executed-in-the-ipython-notebook
 def type_shell():
@@ -43,13 +44,6 @@ def type_shell():
     except NameError:
         # Probably standard Python interpreter
         return 'terminal'
-        
-## rapyroot
-try:
-    rapyroot = Path(__file__).parent.absolute()
-except NameError:
-    rapyroot = Path().absolute()
-# sys.path.insert(0, rapyroot)
 
 ## term_width
 if type_shell()=='terminal':
@@ -89,6 +83,8 @@ class InputError(Error):
 ##
 ##             French strike module
 ##
+##           (Copyright: F. Galliano)
+##
 ##------------------------------------------------
 
 def strike(proc, why, cat=None):
@@ -97,7 +93,8 @@ def strike(proc, why, cat=None):
 
     Copyright: F. Galliano
     '''
-    f = open(rapyroot / 'lib/logo/gameover.txt', 'r')
+    f = open(rapyroot+'/lib/logo/gameover.txt', 'r')
+    # f = open(rapyroot+'/lib/logo/gameover.txt', 'r')
     
     lines = streplace(f.readlines(),[('\n','')])
     # text = f.readlines()
@@ -351,11 +348,46 @@ def print_text(text,width=term_width,pad=0,margin=1,center=False,
                       + tcolor(" "*width,color=color,back_color=back_color, \
                                weight=weight,reset=reset,nocolor=nocolor))
 
+
 ##------------------------------------------------
 ##
 ##              Unsorted functions
 ##
 ##------------------------------------------------
+
+## For current working directory, use os.getcwd()
+def getcfd(filename=None):
+    '''
+    Current (caller's) file directory
+
+    '''
+    if filename is None:
+        frames = inspect.stack()
+        # Nfrm = len(frames)
+        # print(Nfrm)
+        # for i in range(Nfrm):
+        #     print(frames[i][1])
+        # print('\n')
+        # print(frames[0][1]) # def func (lowest level)
+        # print(frames[1][1]) # caller
+        # print('\n')
+        # print(sys._getframe().f_code.co_filename) # def func (lowest level)
+        # print(sys._getframe(1).f_code.co_filename) # caller
+        # print('\n')
+        filename = os.path.abspath(frames[1][0].f_code.co_filename)
+        # cfd = os.path.abspath(frames[1][1])
+        # cfd = os.path.abspath(sys._getframe(1).f_code.co_filename)
+    else:
+        filename = os.path.abspath(filename)
+
+    if not os.path.isfile(filename):
+        warnings.warn(f'"{filename}" is either a directory,'
+                      'or is running on Jupyter notebook.'
+                      'For the latter case, try inserting the .ipynb file name.')
+
+    cfd = os.path.dirname(filename)
+
+    return cfd
 
 ## https://python-forum.io/thread-22874.html    
 def merge_aliases(default, **kwargs):

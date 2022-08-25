@@ -1,5 +1,5 @@
 #+TITLE: RAPYUTA
-#+SUBTITLE: libraRy of Astronomical PYthon UTilities for Astrophysics nerds
+#+SUBTITLE: Regular AstroPY UTility Assemblage
 #+AUTHOR: Dangning HU
 #+OPTIONS: toc:1
 
@@ -14,11 +14,13 @@
 #+TOC: headlines 2 local
 ~rapyuta~ is a Python package for manipulating, cleaning, processing, analyzing, and visualizing astronomical data.
 ~rapyuta~ compiles several software/libraries/scripts in various programming languages (Python, IDL, Fortran, C, /etc./) used in astronomy/astrophysics and provides a consistent Python interface.
-** Laputa: Castle in the Sky / 天空の城ラピュタ (Tenkū no Shiro Rapyuta)
-Laputan is an inhabitant of a flying island in Swift's Gulliver's Travels characterized by a neglect of useful occupations and a devotion to visionary projects.
+** Castle in the Sky: Laputa
+Castle in the Sky: Laputa (Japanese: 天空の城ラピュタ, Hepburn: Tenkū no Shiro Rapyuta) is a 1986 Japanese animated fantasy adventure film written and directed by Hayao Miyazaki.
+We also refer to the flying island in /Swift's Gulliver's Travels/, whose inhabitants, the Laputans, are characterized by a neglect of useful occupations and a devotion to visionary projects.
 
 [[./arx/laputa.png]] [[./arx/rapyuta.png]]
 ** De-Acronyms [[https://forms.gle/bL421uphHmVFqkUU8][(Vote link)]]
+- Regular AstroPY UTility Assemblage
 - libraRy of Astronomical PYthon UTilities for Astrophysics nerds
 - Ready-to-use AstroPhysicists' Yon-jigen poketto UlTimAte edition
 - Real AstroPY UTopiAn
@@ -44,15 +46,24 @@ Laputan is an inhabitant of a flying island in Swift's Gulliver's Travels charac
 ## Python env control via conda (recommanded)
 conda create --name py310 python=3.10
 ## Under the RAPYUTA root path (optional)
-pip install -r requirements.txt
+pip install -r pip-requirements
 
 ## Install/Update
 pip install rapyuta --upgrade
+
+## Boost
+rapyboost
 
 ## Uninstall
 pip uninstall rapyuta
 #+END_SRC
 ** Dependencies
+#+BEGIN_SRC bash
+## Under the RAPYUTA root path (optional)
+git clone https://github.com/yourfork/RAPYUTA.git
+## Or only the latest commit
+git clone --depth=1 https://github.com/yourfork/RAPYUTA.git
+#+END_SRC
 *** Python 
 The current release of ~rapyuta~ library was developed under Python 3.10 and has been tested for Python >=3.8 versions.
 We constantly update the Python environment in order to have access to the latest features.
@@ -94,19 +105,29 @@ Open access with the 3-Clause BSD License
   + ~inout~: ~get_cd~, ~get_pc~ and ~patch_wcs_3D~ (former ~fixwcs~)
   + ~maths~: others
 - Splitted ~imaging~
+  + Created ~impro/~
   + ~instr~: 
-  + ~impro~: others
-- ~plots.plotool~
-  + Fixed issue in ~append_handles~ when adding legend for the same axis
-- Moved ~tests/use_cases/~ to ~cas/~
-- Created IPython Notebook user manual (~man/~)
-  + Added ~utbox.codefold~ (\copy Damian Kao)
+- Splitted ~plots~
+  + Created ~plots/~
+  + Renamed ~plotool~ to ~plotutils~
+    * Fixed issue in ~append_handles~ when adding legend for the same axis
+- Splitted ~tests/~
+  + Moved ~tests/use_cases/~ to ~cas/~
+  + Created IPython Notebook user manual (~man/~)
+    * Added ~utbox.codefold~ (\copy Damian Kao)
   + Removed ~tests/~
-- Updated dependencies
-  + python: >=3.6 \rarr >=3.8
-  + astropy: >=5.1
-  + photutils, specutils, colorama
-  + [Optional] ipython, jupyter
+  + Created ~rapyuta/tests/~ for ~pytest~
+- Package managements
+  + Created ~setup.cfg~ and moved to ~arx/~
+  + Created ~pyproject.toml~
+  + Created ~MANIFEST.in~
+  + Updated dependencies
+    * python: >=3.6 \rarr >=3.8
+    * astropy: >=5.1
+    * photutils, specutils, colorama
+    * [Optional] ipython, jupyter, setuptools_scm
+  + Updated version control
+- Updated the acronym
 ** v2.2.1 (20220616)
 - ~plots.plotool~
   + Fixed labels for ~reset_handles~

@@ -3,13 +3,8 @@
 
 """
 
-Imaging
+Image processing
 
-    improve:
-        reinit, uncert, 
-        rand_norm, rand_splitnorm, rand_pointing, 
-        slice, slice_inv_sq, crop, rebin, groupixel
-        smooth, artifact, mask
     Jy_per_pix_to_MJy_per_sr(improve):
         header, image, wave
     iuncert(improve):
@@ -56,14 +51,10 @@ import warnings
 # warnings.filterwarnings("ignore", message="Skipping SYSTEM_VARIABLE record")
 
 ## Local
-from utbox import InputError
-from inout import (fitsext, csvext, ascext, savext, fclean,
-                   read_fits, write_fits, patch_wcs_3D, get_pc,
-                   write_hdf5,
-                   # read_csv, write_csv, read_ascii,
-)
-from latte import listize, closest, pix2sup, sup2pix
-from maths import nanavg, pix2sr, bsplinterpol
+import rapyuta.utbox as UT
+import rapyuta.latte as LA
+import rapyuta.maths as MA
+from rapyuta.inout import fitsext, csvext, ascext, savext,
 
 ##-----------------------------------------------
 ##
@@ -362,9 +353,9 @@ class improve:
                     frac1 = 1 - frac2
                     for xs in range(Nxs):
                         if frac2>=0:
-                            x0 = sup2pix(0, xscale, Npix=Nx, origin=0)
+                            x0 = LA.sup2pix(0, xscale, Npix=Nx, origin=0)
                         else:
-                            x0 = sup2pix(Nxs-1, xscale, Npix=Nx, origin=0)
+                            x0 = LA.sup2pix(Nxs-1, xscale, Npix=Nx, origin=0)
                         if fill=='med':
                             fill_value = np.nanmedian(self.im,axis=2)
                         elif fill=='avg':
@@ -375,10 +366,10 @@ class improve:
                             fill_value = fill
                         if frac2>=0:
                             if xs>=f2:
-                                x1 = sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
+                                x1 = LA.sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
                                 cube_supx[:,:,xs] += (f2+frac1) * np.nanmean(self.im[:,:,x1[0]:x1[-1]+1],axis=2)
                                 if xs>f2:
-                                    x2 = sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
+                                    x2 = LA.sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
                                     cube_supx[:,:,xs] += (frac2-f2) * np.nanmean(self.im[:,:,x2[0]:x2[-1]+1],axis=2)
                                 else:
                                     cube_supx[:,:,xs] += (frac2-f2) * fill_value
@@ -388,10 +379,10 @@ class improve:
                                 #     warnings.warn('Zero appears at super x = {}'.format(xs))
                         else:
                             if xs<=Nxs+f2:
-                                x2 = sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
+                                x2 = LA.sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
                                 cube_supx[:,:,xs] += (frac2-f2) * np.nanmean(self.im[:,:,x2[0]:x2[-1]+1],axis=2)
                                 if xs<Nxs+f2:
-                                    x1 = sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
+                                    x1 = LA.sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
                                     cube_supx[:,:,xs] += (f2+frac1) * np.nanmean(self.im[:,:,x1[0]:x1[-1]+1],axis=2)
                                 else:
                                     cube_supx[:,:,xs] += (f2+frac1) * fill_value
@@ -407,9 +398,9 @@ class improve:
                     frac1 = 1 - frac2
                     for ys in range(Nys):
                         if frac2>=0:
-                            y0 = sup2pix(0, yscale, Npix=Ny, origin=0)
+                            y0 = LA.sup2pix(0, yscale, Npix=Ny, origin=0)
                         else:
-                            y0 = sup2pix(Nys-1, yscale, Npix=Ny, origin=0)
+                            y0 = LA.sup2pix(Nys-1, yscale, Npix=Ny, origin=0)
                         if fill=='med':
                             fill_value = np.nanmedian(cube_supx,axis=1)
                         elif fill=='avg':
@@ -420,10 +411,10 @@ class improve:
                             fill_value = fill
                         if frac2>=0:
                             if ys>=f2:
-                                y1 = sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
+                                y1 = LA.sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
                                 supcube[:,ys,:] += (f2+frac1) * np.nanmean(cube_supx[:,y1[0]:y1[-1]+1,:],axis=1)
                                 if ys>f2:
-                                    y2 = sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
+                                    y2 = LA.sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
                                     supcube[:,ys,:] += (frac2-f2) * np.nanmean(cube_supx[:,y2[0]:y2[-1]+1,:],axis=1)
                                 else:
                                     supcube[:,ys,:] += (frac2-f2) * fill_value
@@ -433,10 +424,10 @@ class improve:
                                 #     warnings.warn('Zero appears at super y = {}'.format(ys))
                         else:
                             if ys<=Nys+f2:
-                                y2 = sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
+                                y2 = LA.sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
                                 supcube[:,ys,:] += (frac2-f2) * np.nanmean(cube_supx[:,y2[0]:y2[-1]+1,:],axis=1)
                                 if ys<Nys+f2:
-                                    y1 = sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
+                                    y1 = LA.sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
                                     supcube[:,ys,:] += (f2+frac1) * np.nanmean(cube_supx[:,y1[0]-1:y1[-1],:],axis=1)
                                 else:
                                     supcube[:,ys,:] += (f2+frac1) * fill_value
@@ -447,8 +438,8 @@ class improve:
                     
                     for x in range(Nx):
                         for y in range(Ny):
-                            xs = pix2sup(x, xscale, origin=0)
-                            ys = pix2sup(y, yscale, origin=0)
+                            xs = LA.pix2sup(x, xscale, origin=0)
+                            ys = LA.pix2sup(y, yscale, origin=0)
                             self.im[:,y,x] = supcube[:,ys,xs]
                     
                 elif self.Ndim==2:
@@ -459,9 +450,9 @@ class improve:
                     frac1 = 1 - frac2
                     for xs in range(Nxs):
                         if frac2>=0:
-                            x0 = sup2pix(0, xscale, Npix=Nx, origin=0)
+                            x0 = LA.sup2pix(0, xscale, Npix=Nx, origin=0)
                         else:
-                            x0 = sup2pix(Nxs-1, xscale, Npix=Nx, origin=0)
+                            x0 = LA.sup2pix(Nxs-1, xscale, Npix=Nx, origin=0)
                         if fill=='med':
                             fill_value = np.nanmedian(self.im,axis=1)
                         elif fill=='avg':
@@ -472,10 +463,10 @@ class improve:
                             fill_value = fill
                         if frac2>=0:
                             if xs>=f2:
-                                x1 = sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
+                                x1 = LA.sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
                                 cube_supx[:,xs] += (f2+frac1) * np.nanmean(self.im[:,x1[0]:x1[-1]+1],axis=1)
                                 if xs>f2:
-                                    x2 = sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
+                                    x2 = LA.sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
                                     cube_supx[:,xs] += (frac2-f2) * np.nanmean(self.im[:,x2[0]:x2[-1]+1],axis=1)
                                 else:
                                     cube_supx[:,xs] += (frac2-f2) * fill_value
@@ -485,10 +476,10 @@ class improve:
                                 #     warnings.warn('Zero appears at super x = {}'.format(xs))
                         else:
                             if xs<=Nxs+f2:
-                                x2 = sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
+                                x2 = LA.sup2pix(xs-f2-1, xscale, Npix=Nx, origin=0)
                                 cube_supx[:,xs] += (frac2-f2) * np.nanmean(self.im[:,x2[0]:x2[-1]+1],axis=1)
                                 if xs<Nxs+f2:
-                                    x1 = sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
+                                    x1 = LA.sup2pix(xs-f2, xscale, Npix=Nx, origin=0)
                                     cube_supx[:,xs] += (f2+frac1) * np.nanmean(self.im[:,x1[0]:x1[-1]+1],axis=1)
                                 else:
                                     cube_supx[:,xs] += (f2+frac1) * fill_value
@@ -504,9 +495,9 @@ class improve:
                     frac1 = 1 - frac2
                     for ys in range(Nys):
                         if frac2>=0:
-                            y0 = sup2pix(0, yscale, Npix=Ny, origin=0)
+                            y0 = LA.sup2pix(0, yscale, Npix=Ny, origin=0)
                         else:
-                            y0 = sup2pix(Nys-1, yscale, Npix=Ny, origin=0)
+                            y0 = LA.sup2pix(Nys-1, yscale, Npix=Ny, origin=0)
                         if fill=='med':
                             fill_value = np.nanmedian(cube_supx,axis=0)
                         elif fill=='avg':
@@ -517,10 +508,10 @@ class improve:
                             fill_value = fill
                         if frac2>=0:
                             if ys>=f2:
-                                y1 = sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
+                                y1 = LA.sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
                                 supcube[ys,:] += (f2+frac1) * np.nanmean(cube_supx[y1[0]:y1[-1]+1,:],axis=0)
                                 if ys>f2:
-                                    y2 = sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
+                                    y2 = LA.sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
                                     supcube[ys,:] += (frac2-f2) * np.nanmean(cube_supx[y2[0]:y2[-1]+1,:],axis=0)
                                 else:
                                     supcube[ys,:] += (frac2-f2) * fill_value
@@ -530,10 +521,10 @@ class improve:
                                 #     warnings.warn('Zero appears at super y = {}'.format(ys))
                         else:
                             if ys<=Nys+f2:
-                                y2 = sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
+                                y2 = LA.sup2pix(ys-f2-1, yscale, Npix=Ny, origin=0)
                                 supcube[ys,:] += (frac2-f2) * np.nanmean(cube_supx[y2[0]:y2[-1]+1,:],axis=0)
                                 if ys<Nys+f2:
-                                    y1 = sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
+                                    y1 = LA.sup2pix(ys-f2, yscale, Npix=Ny, origin=0)
                                     supcube[ys,:] += (f2+frac1) * np.nanmean(cube_supx[y1[0]-1:y1[-1],:],axis=0)
                                 else:
                                     supcube[ys,:] += (f2+frac1) * fill_value
@@ -544,8 +535,8 @@ class improve:
                     
                     for x in range(Nx):
                         for y in range(Ny):
-                            xs = pix2sup(x, xscale, origin=0)
-                            ys = pix2sup(y, yscale, origin=0)
+                            xs = LA.pix2sup(x, xscale, origin=0)
+                            ys = LA.pix2sup(y, yscale, origin=0)
                             self.im[y,x] = supcube[ys,xs]
 
             ## Original NaN mask
@@ -624,7 +615,7 @@ class improve:
         ##-------------
         if cenpix is None:
             if cenval is None:
-                raise ValueError('Crop center unavailable! ')
+                UT.strike('improve.crop', 'miss crop center', cat='InputError')
             else:
                 ## Convert coord
                 try:
@@ -637,13 +628,14 @@ class improve:
         else:
             cenval = self.w.all_pix2world(np.array([cenpix]), 1)[0]
         if not (0<cenpix[0]-0.5<self.Nx and 0<cenpix[1]-0.5<self.Ny):
-            raise ValueError('Crop centre overpassed image border! ')
+            UT.strike('improve.crop', 'crop centre overpassed the image edge.',
+                      cat='ValueError')
 
         ## Crop size
         ##-----------
         if sizpix is None:
             if sizval is None:
-                raise ValueError('Crop size unavailable! ')
+                UT.strike('improve.crop', 'miss crop size', cat='InputError')
             else:
                 ## CDELTn needed (Physical increment at the reference pixel)
                 sizpix = np.array(sizval) / abs(self.cdelt)
@@ -667,7 +659,8 @@ class improve:
         ymax = ymin + sizpix[1]
 
         if not (xmin>=0 and xmax<=self.Nx and ymin>=0 and ymax<=self.Ny):
-            raise ValueError('Crop region overpassed image border! ')
+            UT.strike('improve.crop', 'crop region overpassed the image edge.',
+                      cat='ValueError')
 
         ## OUTPUTS
         ##---------
@@ -734,7 +727,7 @@ class improve:
         oldNy = self.Ny
         
         if pixscale is not None:
-            pixscale = listize(pixscale)
+            pixscale = LA.listize(pixscale)
             if len(pixscale)==1:
                 pixscale.extend(pixscale)
             else:
@@ -746,7 +739,7 @@ class improve:
             xratio = cdelt[0] / abs(oldcdelt[0])
             yratio = cdelt[1] / abs(oldcdelt[1])
         else:
-            pixscale = listize(abs(oldcdelt) * 3600.)
+            pixscale = LA.listize(abs(oldcdelt) * 3600.)
             xratio = 1.
             yratio = 1.
 
@@ -755,9 +748,9 @@ class improve:
                 print('The actual map size is {} * {}'.format(self.Nx, self.Ny))
                 print('The actual pixel scale is {} * {} arcsec'.format(*pixscale))
                 print('----------')
-                
-            raise InputError('<improve.rebin>',
-                             'No pixscale, nothing has been done!')
+
+            UT.strike('improve.rebin', 'miss pixscale. Nothing has been done.',
+                      cat='InputError')
 
         ## Modify header
         ##---------------
@@ -980,33 +973,33 @@ class improve:
             ## Super pixels
             image_sup = np.zeros((self.Nw,Nys,Nxs))
             for xs in range(Nxs):
-                xarr = sup2pix(xs, xscale, Npix=self.Nx, origin=0)
+                xarr = LA.sup2pix(xs, xscale, Npix=self.Nx, origin=0)
                 for ys in range(Nys):
-                    yarr = sup2pix(ys, yscale, Npix=self.Ny, origin=0)
+                    yarr = LA.sup2pix(ys, yscale, Npix=self.Ny, origin=0)
                     im = self.im[:,yarr[0]:yarr[-1]+1,xarr[0]:xarr[-1]+1]
                     image_sup[:,ys,xs] += np.nanmean(im,axis=(1,2))
             ## Grouped pixels
             image_grp = np.zeros((self.Nw,self.Ny,self.Nx))
             for x in range(self.Nx):
                 for y in range(self.Ny):
-                    xs = pix2sup(x, xscale, origin=0)
-                    ys = pix2sup(y, yscale, origin=0)
+                    xs = LA.pix2sup(x, xscale, origin=0)
+                    ys = LA.pix2sup(y, yscale, origin=0)
                     image_grp[:,y,x] = image_sup[:,ys,xs]
         elif self.Ndim==2:
             ## Super pixels
             image_sup = np.zeros((Nys,Nxs))
             for xs in range(Nxs):
-                xarr = sup2pix(xs, xscale, Npix=self.Nx, origin=0)
+                xarr = LA.sup2pix(xs, xscale, Npix=self.Nx, origin=0)
                 for ys in range(Nys):
-                    yarr = sup2pix(ys, yscale, Npix=self.Ny, origin=0)
+                    yarr = LA.sup2pix(ys, yscale, Npix=self.Ny, origin=0)
                     im = self.im[yarr[0]:yarr[-1]+1,xarr[0]:xarr[-1]+1]
                     image_sup[ys,xs] += np.nanmean(im)
             ## Grouped pixels
             image_grp = np.zeros((self.Ny,self.Nx))
             for x in range(self.Nx):
                 for y in range(self.Ny):
-                    xs = pix2sup(x, xscale, origin=0)
-                    ys = pix2sup(y, yscale, origin=0)
+                    xs = LA.pix2sup(x, xscale, origin=0)
+                    ys = LA.pix2sup(y, yscale, origin=0)
                     image_grp[y,x] = image_sup[ys,xs]
 
         if filOUT is not None:
@@ -1018,6 +1011,7 @@ class improve:
 
         return image_grp
     
+    ## See also specutils.smoothing
     def smooth(self, smooth=1, wgrid=None, wstart=None, filOUT=None):
         '''
         Smooth wavelengths
@@ -1073,6 +1067,7 @@ class improve:
 
         return newcube
 
+    ## See also specutils.smoothing
     def artifact(self, filUNC=None, BG_image=None, zerovalue=np.nan,
                  wmin=None, wmax=None, lim_unc=1.e2, fltr_pn=None, cmin=5,
                  filOUT=None):
@@ -1101,10 +1096,10 @@ class improve:
 
         if wmin is None:
             wmin = wvl[0]
-        iwi = listize(wvl).index(wvl[closest(wvl,wmin)])
+        iwi = LA.listize(wvl).index(wvl[LA.closest(wvl,wmin)])
         if wmax is None:
             wmax = wvl[-1]
-        iws = listize(wvl).index(wvl[closest(wvl,wmax)])
+        iws = LA.listize(wvl).index(wvl[LA.closest(wvl,wmax)])
 
         if lim_unc<0:
             raise ValueError('lim_unc must be positive!')
@@ -1171,7 +1166,7 @@ class Jy_per_pix_to_MJy_per_sr(improve):
         super().__init__(filIN, wmod=wmod, verbose=verbose)
 
         ## gmean( Jy/MJy / sr/pix )
-        ufactor = np.sqrt(np.prod(1.e-6/pix2sr(1., self.cdelt)))
+        ufactor = np.sqrt(np.prod(1.e-6/MA.pix2sr(1., self.cdelt)))
         self.im = self.im * ufactor
         self.hdr['BUNIT'] = 'MJy/sr'
 
@@ -1385,8 +1380,8 @@ class imontage(improve):
         elif reproject_function=='adaptive':
             self.func = reproject_adaptive
         else:
-            raise InputError('<imontage>',
-                             'Unknown reprojection !')
+            UT.strike('imontage', 'unknown reprojection algorithm.',
+                      cat='InputError')
         
         ## Set path of tmp files
         if tmpdir is None:
@@ -1426,11 +1421,8 @@ class imontage(improve):
         ------ OUTPUT ------
         images              reprojected images
         '''
-        flist = listize(flist)
-        
-        # if refheader is None:
-        #     raise InputError('<imontage>','No reprojection header!')
-        
+        flist = LA.listize(flist)
+
         images = []
         for f in flist:
             super().__init__(f)
@@ -1495,7 +1487,7 @@ class imontage(improve):
         '''
         Reproject and coadd
         '''
-        flist = listize(flist)
+        flist = LA.listize(flist)
         ds = type('', (), {})()
         comment = "Created by <imontage>"
 
@@ -1628,17 +1620,17 @@ class iswarp(improve):
 
         if flist is None:
             if refheader is None:
-                raise InputError('<iswarp>','No input!')
+                UT.strike('iswarp', 'no input.', cat='InputError')
             
             ## Define coadd frame via refheader
             else:
                 if center is not None or pixscale is not None:
-                    warnings.warn('The keywords center and pixscale are dumb. ')
+                    warnings.warn('The keywords center and pixscale are dumb.')
 
                 self.refheader = refheader
         else:
             ## Input files in list object
-            flist = listize(flist)
+            flist = LA.listize(flist)
                 
             ## Images
             image_files = ' '
@@ -1767,7 +1759,7 @@ class iswarp(improve):
             os.makedirs(path_comb)
 
         ## Input files in list format
-        flist = listize(flist)
+        flist = LA.listize(flist)
         
         ## Header
         ##--------
@@ -2029,7 +2021,7 @@ class iconvolve(improve):
         self.rand_pointing(sig_pt, fill=fill_pt)
 
         ## Input kernel file in list format
-        self.kfile = listize(kfile)
+        self.kfile = LA.listize(kfile)
 
         ## doc (csv) file of kernel list
         self.klist = klist
@@ -2076,7 +2068,7 @@ class iconvolve(improve):
     #     ------ OUTPUT ------
     #     '''
     #     ## Input files in list format
-    #     flist = listize(flist)
+    #     flist = LA.listize(flist)
         
     #     ## CHOose KERnel(s)
     #     lst = []
@@ -2084,7 +2076,7 @@ class iconvolve(improve):
     #         ## check PSF profil (or is not a cube)
     #         if self.sigma_lam is not None:
     #             image = flist[i]
-    #             ind = closest(self.psf, self.sigma_lam[i])
+    #             ind = LA.closest(self.psf, self.sigma_lam[i])
     #             kernel = self.kfile[ind]
     #         else:
     #             image = flist[0]
@@ -2103,7 +2095,7 @@ class iconvolve(improve):
         ------ OUTPUT ------
         '''
         ## Input files in list format
-        flist = listize(flist)
+        flist = LA.listize(flist)
         
         ## CHOose KERnel(s)
         image = []
@@ -2112,7 +2104,7 @@ class iconvolve(improve):
             ## check PSF profil (or is not a cube)
             if self.fwhm_lam is not None:
                 image.append(filim)
-                ind = closest(self.psf, self.fwhm_lam[i])
+                ind = LA.closest(self.psf, self.fwhm_lam[i])
                 # print('ind = ',ind)
                 # print('psf = ',self.psf[ind])
                 # print('kfile = ',self.kfile[ind])
@@ -2309,8 +2301,8 @@ class cupid(improve):
             wmin = wave[0]
         if wmax is None:
             wmax = wave[-1]
-        iwi = closest(wave, wmin, side='right')
-        iws = closest(wave, wmax, side='left')+1
+        iwi = LA.closest(wave, wmin, side='right')
+        iws = LA.closest(wave, wmax, side='left')+1
         wave = wave[iwi:iws]
         Nw = len(wave)
         
@@ -2626,18 +2618,18 @@ def interfill(arr, axis):
     if NAXIS==1: # 1D array
         x = np.arange(axsh[0])
         for i in range(axsh[0]):
-            newarr = bsplinterpol(x, arr, x)
+            newarr = MA.bsplinterp(x, arr, x)
     if NAXIS==2: # no wavelength
         if axis==0: # col direction
             y = np.arange(axsh[0])
             for i in range(axsh[1]):
-                col = bsplinterpol(y, arr[:,i], y)
+                col = MA.bsplinterp(y, arr[:,i], y)
                 for j in range(axsh[0]):
                     newarr[j,i] = col[j]
         elif axis==1: # row direction
             x = np.arange(axsh[1])
             for j in range(axsh[0]):
-                row = bsplinterpol(x, arr[j,:], x)
+                row = MA.bsplinterp(x, arr[j,:], x)
                 for i in range(axsh[1]):
                     newarr[j,i] = row[i]
         else:
@@ -2647,21 +2639,21 @@ def interfill(arr, axis):
             z = np.arange(axsh[0])
             for i in range(axsh[2]):
                 for j in range(axsh[1]):
-                    wvl = bsplinterpol(z, arr[:,j,i], z)
+                    wvl = MA.bsplinterp(z, arr[:,j,i], z)
                     for k in range(axsh[0]):
                         newarr[k,j,i] = wvl[k]
         elif axis==1: # col direction
             y = np.arange(axsh[1])
             for k in range(axsh[0]):
                 for i in range(axsh[2]):
-                    col = bsplinterpol(y, arr[k,:,i], y)
+                    col = MA.bsplinterp(y, arr[k,:,i], y)
                     for j in range(axsh[1]):
                         newarr[k,j,i] = col[j]
         elif axis==2: # row direction
             x = np.arange(axsh[2])
             for k in range(axsh[0]):
                 for j in range(axsh[1]):
-                    row = bsplinterpol(x, arr[k,j,:], x)
+                    row = MA.bsplinterp(x, arr[k,j,:], x)
                     for i in range(axsh[2]):
                         newarr[k,j,i] = row[i]
         else:
@@ -2840,8 +2832,8 @@ def concatenate(flist, filOUT=None, comment=None,
     else:
         for f in flist:
             fi = read_fits(f)
-            imin = closest(wmin, fi.wave[0])
-            imax = closest(wmax, fi.wave[-1])
+            imin = LA.closest(wmin, fi.wave[0])
+            imax = LA.closest(wmax, fi.wave[-1])
             iwi = 0
             iws = -1
             for i, w in enumerate(fi.wave[:-2]):

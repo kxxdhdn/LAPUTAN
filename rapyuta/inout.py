@@ -14,7 +14,7 @@ Input & Output
 
 """
 
-import sys, logging
+import sys, os, logging
 ## Hide FITSFixedWarning:
 ## Removed redundant SCAMP distortion parameters
 ## because SIP parameters are also present [astropy.wcs.wcs]
@@ -25,21 +25,23 @@ from pathlib import Path
 import warnings
 
 import numpy as np
-from astropy.io import fits
+from astropy.io import fits#, registry
 from astropy.wcs import WCS
+from astropy import units as u
+from specutils.io.registers import identify_spectrum_format
 import h5py as H5
 import csv
 
 ## Local
-import utbox as UT
+import rapyuta.utbox as UT
 
-global fitsext, h5ext, ascext, csvext, savext
 fitsext = '.fits'
 h5ext = '.h5'
 ascext = '.txt'
 csvext = '.csv'
 savext = '.sav'
 
+## Quick file cleaning
 def fclean(fname, *alert):
     '''
     Clean folder/file
@@ -96,7 +98,7 @@ def write_fits(fname, header, data,
 
     hdul.writeto(fname+ext, overwrite=True)
     
-def read_fits(fname, wmod=0, instr=None,
+def read_fits(fname, wmod=0, instr=None, instr_auto=True,
               file_unc=None, ext=fitsext):
     '''
     Read fits file (auto detect dim)
@@ -107,8 +109,11 @@ def read_fits(fname, wmod=0, instr=None,
                           0 - 1darray; 
                           1 - FITS_rec.
     instr               data format depends on instruments (Default: None)
-                          None - primary array contain primary data;
-                          'jwst' - JWST data format
+                          None - primary array contains image/cube data
+                                 table 1 contains wavelength data
+                          'JWST s3d' - JWST spectral cube
+    instr_auto          auto-identify FITS data format (Default: True)
+                          - only works when instr is None
     file_unc            unc filename (Default: None)
                           None - auto detection (ext should be fitsext)
     ------ OUTPUT ------
@@ -125,10 +130,20 @@ def read_fits(fname, wmod=0, instr=None,
     ds.header_w = None
     ds.wave = None
     ds.unc = None
+
+    ## Check for valid string input
+    filename = fname+ext
+    if not isinstance(filename, (str, Path)) or not os.path.isfile(filename):
+        UT.strike('read_fits', f'{filename} is not a valid string path to a file',
+                  cat='InputError')
+
+    ## Identify data format
+    if instr_auto and (instr is None):
+        instr = identify_spectrum_format(filename)
     
-    with fits.open(fname+ext) as hdul:
+    with fits.open(filename) as hdul:
         ds.HDUL = hdul
-        if instr=='jwst':
+        if instr=='JWST s3d':
             ## Read header & data
             hdr = hdul[1].header
             ds.data = hdul[1].data
