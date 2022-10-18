@@ -1,8 +1,8 @@
 #+TITLE: RAPYUTA Archives
-#+SUBTITLE: Released version log
+#+SUBTITLE: Changelog for released versions
 #+AUTHOR: Dangning HU
 
-* Version log
+* Changelog
 :PROPERTIES:
 :UNNUMBERED:
 :END:

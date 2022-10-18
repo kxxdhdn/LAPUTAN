@@ -3,7 +3,7 @@
 
 """
 
-Plot utilities
+Utilities for plots
 
     plotrange,
     Btau, Ctau, ellipse, SUE,

@@ -28,14 +28,15 @@ We also refer to the flying island in /Swift's Gulliver's Travels/, whose inhabi
 *** Level 0
 - utbox (utility box)
 *** Level 1
-- inout (input & output): utbox
-- latte (list, array, tuple, table, etc.): utbox
+- latte (list, array, tuple, table, etc.) \larr utbox
 - maths (mathematics): utbox
 *** Level 2
-- plots (viualization): utbox, latte
-- impro (image processing): utbox, latte, maths, inout
+- inout (input & output) \larr utbox, latte
+- plots (viualization) \larr utbox, latte
 *** Level 3
-- instr (instruments): utbox, latte, inout, plots
+- impro (image processing) \larr utbox, latte, maths, inout
+*** Level 4
+- instr (instruments) \larr utbox, inout, latte, maths, impro, plots
 * Helpdesk
 :PROPERTIES:
 :UNNUMBERED:
@@ -86,29 +87,36 @@ Required by the synthetic photometry module.
 :UNNUMBERED:
 :END:
 Open access with the 3-Clause BSD License
-* Version Log
+* Changelog
 :PROPERTIES:
 :UNNUMBERED:
 :END:
 ** v2.2.2 (20220822)
-- JWST data support
+/This version contains significant changes throughout the whole library./
+/Programs using former versions are very likely to encounter compatibility issues./
+- JWST data support (ongoing)
   + [[https://jwst-docs.stsci.edu/understanding-jwst-data-files/jwst-data-formats][JWST Data Formats]]
-    * FITS (updated ~inout~)
-    * ASDF (not concerned)
-    * ECSV (not concerned)
+    * FITS
+    * ASDF (not concerned yet)
+    * ECSV (not concerned yet)
+  + Added ~instr~ kw for ~inout.read_fits~
+    * Auto-detect format via ~specutils~ func
+    * Supported JWST spectral 3D cubes (~'JWST s3d'~)
   + Wrapping ~specutils~ and ~photutils~
 - Renamed ~utilities~ to ~utbox~
   + Added the French strike module (\copy F. Galliano)
 - Renamed ~arrays~ to ~latte~
-- Renamed ~calib~ to ~instr~
+  + Merged ~pix2sup~ and ~sup2pix~ to ~zoom~
+- Renamed ~calib~ to ~instr/~: ~utils~, ~instr~, ~akari~, ~spitzer~ & ~jwst~
 - Splitted ~astrom~
   + ~inout~: ~get_cd~, ~get_pc~ and ~patch_wcs_3D~ (former ~fixwcs~)
   + ~maths~: others
 - Splitted ~imaging~
-  + Created ~impro/~
-  + ~instr~: 
+  + Created ~impro/~: ~utils~, ~impro~ & ~idlastro~
+  + ~instr/~: ~akari.cupid~
+  + Updated ~impro.improve~ IO & instances (important changes!)
 - Splitted ~plots~
-  + Created ~plots/~
+  + Created ~plots/~: ~utils~ & ~plots~
   + Renamed ~plotool~ to ~plotutils~
     * Fixed issue in ~append_handles~ when adding legend for the same axis
 - Splitted ~tests/~
@@ -125,7 +133,7 @@ Open access with the 3-Clause BSD License
     * python: >=3.6 \rarr >=3.8
     * astropy: >=5.1
     * photutils, specutils, colorama
-    * [Optional] ipython, jupyter, setuptools_scm
+    * [Optional] ipython, jupyter
   + Updated version control
 - Updated the acronym
 ** v2.2.1 (20220616)
@@ -139,4 +147,4 @@ Open access with the 3-Clause BSD License
 - ~plots.plotool~
   + Added tick label formatter 'mylog' (opitimized for <1 case)
 - Added ~tests/use_cases/~
-** [[./arx/version_log_arx.org][Archived (v<2.2)]]
+** [[./arx/changelog.org][Archived (v<2.2)]]

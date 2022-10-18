@@ -19,7 +19,7 @@ import scipy.interpolate as interpolate
 import warnings
 
 ## Local
-import utbox as UT
+import rapyuta.utbox as UT
 
 
 ## Python string formatting
@@ -103,7 +103,7 @@ def nanrms(a, ddof=0):
 
 def std(a, ddof=0):
     '''
-    The same as np.std
+    See also numpy.std
     '''
     n = np.size(a) - ddof
     a = np.array(a)

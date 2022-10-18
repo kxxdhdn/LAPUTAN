@@ -8,4 +8,5 @@ used by and in rapyuta.
 """
 
 from .impro import *
+from .idlastro import *
 from .utils import *

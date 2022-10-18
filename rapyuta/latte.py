@@ -5,8 +5,7 @@
 
 List, Array, Tuple, Table, Etc.
 
-    ramp, arrayize, listize, closest,
-    pix2sup, sup2pix, 
+    ramp, arrayize, listize, closest, zoom
 
 """
 
@@ -16,7 +15,7 @@ import numpy as np
 from astropy.table import Table
 
 ## Local
-import utbox as UT
+import rapyuta.utbox as UT
 
 
 ##------------------------------------------------
@@ -144,7 +143,9 @@ def listize(arr):
     Convert any iterable to list object
     worked for int, float, string, tuple, ndarray, list, dict, set, etc.
     '''
-    if np.isscalar(arr):
+    if arr is None:
+        listout = None
+    elif np.isscalar(arr):
         listout = [arr] # scalar (string, int, float, etc.)
     elif isinstance(arr, np.ndarray):
         listout = arr.tolist() # ndarray
@@ -200,69 +201,55 @@ def closest(arr, val, side=None):
     
     return ind
 
-def pix2sup(x, xscale=1, x0=None, origin=0):
+def zoom(coord, scale=1, zp=0, grid=None,
+         integer=False, start=0):
     '''
-    Convert pixel to super pixel coordinates given super pixel zero point
+    Convert old coordinates to zoomed coord, given the scaling factor.
+    
+    When new coord are integers (integer=True), each value is rounded down to the closest integer.
 
+    In DS9, the lower left pixel (1,1) is centered at the image grid (1,1)
+    Whereas the image grid non-NaN zeropoint is (0.5,0.5)
+
+    See also scipy.ndimage.zoom
     ------ INPUT ------
-    x                   pixel coordinates
-    xscale              super pixel size (Default: 1)
-    x0                  zero point of super pixel
-    origin              zero point convention
-                          1 if in FITS and Fortran standards
-                          0 if in Numpy and C standards
+    coord               old coordinates
+    scale               positive scaling factor (Default: 1)
+    zp                  zeropoint shift
+    grid                quick config of grid coordinates
+                          'DS9' - DS9 pixel grid is integer starting with 1
+                          None - read keywords "integer" and "start" (Default)
+    integer             coordinates are integers (Default: False)
+    start               coordinates start with 0/1 (Default: 0)
     ------ OUTPUT ------
-    xs                  super pixel coordinates
+    newcoord            new coordinates
+                          - list of all possible values if integer=True
     '''
-    if origin==1:
-        if x0 is None:
-            x0 = 1
-            
-        if x-x0>=0:
-            xs = math.floor((x-x0)/xscale) + 1
+    ## Check inputs
+    if scale<=0:
+        UT.strike('zoom', 'scaling factor must be positive.',
+                  cat='InputError')
+
+    ## Known grids
+    if grid=='DS9':
+        integer = True
+        start = 1
+
+    if integer:
+        if scale>1:
+            Nsub = math.ceil(scale)
         else:
-            xs = math.floor((x-x0)/xscale)
-            
-    elif origin==0:
-        if x0 is None:
-            x0 = 0
-            
-        xs = math.floor((x-x0)/xscale)
-    
-    return xs
-
-def sup2pix(xs, xscale=1, x0=None, Npix=None, origin=0):
-    '''
-    Convert super pixel to pixel coordinates given super pixel zero point
-
-    ------ INPUT ------
-    xs                  super pixel coordinates
-    xscale              super pixel size (Default: 1)
-    x0                  zero point of super pixel
-    origin              zero point convention
-                          1 if in FITS and Fortran standards
-                          0 if in Numpy and C standards
-    ------ OUTPUT ------
-    xarr                pixel coordinates
-    '''
-    if origin==1:
-        if x0 is None:
-            x0 = 1
-            
-        x = x0 + (xs-1) * xscale
-
-    elif origin==0:
-        if x0 is None:
-            x0 = 0
-            
-        x = x0 + xs * xscale
-
-    if Npix is None:
-        xarr = [x+i for i in range(xscale)]
+            Nsub = math.ceil(1./scale)
+        # newcoord0 = math.floor((coord-start - zp)/scale + start)
+        newcoord0 = math.floor((coord-start - zp)/scale)
+        if newcoord0>=0:
+            newcoord0 += start # No 0 in the coord
+        newcoord = [newcoord0+i for i in range(Nsub)]
     else:
-        xarr = []
-        for i in range(xscale):
-            if x+i<=Npix:
-                xarr.append(x+i)
-    
-    return xarr
+        # newcoord0 = (coord-start - zp)/scale + start
+        newcoord0 = (coord-start - zp)/scale
+        if newcoord0>=0:
+            newcoord0 += start # No 0 in the coord
+        newcoord = listize(newcoord0)
+
+    return newcoord

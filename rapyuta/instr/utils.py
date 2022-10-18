@@ -7,7 +7,6 @@ Calibration
 
     intercalib:
         read_filter, synthetic_photometry, correct_spec
-    photometry_profile
 
 """
 
@@ -18,10 +17,9 @@ import numpy as np
 from matplotlib.ticker import ScalarFormatter, NullFormatter
 import subprocess as SP
 import warnings
-DEVNULL = open(os.devnull, 'w')
 
 ## Local
-from utbox import rapyroot
+from rapyuta import rapyroot
 from inout import (
     ascext, fitsext, h5ext,
     read_fits, write_fits, patch_wcs_3D,
@@ -315,184 +313,3 @@ class intercalib:
             write_fits(filOUT, header, new_spec, wave=w_spec)
         
         return new_spec
-
-"""
-class spec2phot(intercalib):
-    '''
-    Intercalibration between spectrometry and photometry (REF)
-
-    --- INPUT ---
-    filIN       to convolve
-    filREF      convolution ref
-    phot        photometry name (once a phot)
-    filKER      convolution kernel(s) (Default: None)
-    --- OUTPUT ---
-    '''
-    def __init__(self, filIN, filREF, phot, filKER=None, saveKER=None, \
-        uncIN=None, Nmc=0, filOUT=None):
-        super().__init__(filIN)
-        self.phot = phot
-
-        if self.wave is not None: # filIN is spec
-            ## Convolve filIN (spec)
-            if filKER is not None:
-                conv = iconvolve(filIN, filKER, saveKER, \
-                    uncIN, filOUT=filPRO)
-            else:
-                filPRO = filIN # filPRO is spec
-            
-            ## Reprojection to spec (filIN)
-            pro = imontage(filREF, filPRO)
-            F_phot = pro.reproject(filOUT=filOUT)
-
-        else: # filIN is phot
-            ## Reset header (should be spec)
-            self.hdr = read_fits(filREF).header
-            self.im = read_fits(filREF).data
-            self.wvl = read_fits(filREF).wave
-            
-            ## Convolve filIN (phot)
-            if filKER is not None:
-                conv = iconvolve(filIN, filKER, saveKER, \
-                    uncIN, filOUT=filPRO)
-            else:
-                filPRO = filIN # filPRO is phot
-            
-            ## Reprojection to spec (filREF)
-            pro = imontage(filPRO, filREF)
-            F_phot = pro.reproject(filOUT=filOUT)
-
-        ## Synthetic photometry
-        wcen, Fsyn, Fsig = self.synthetic_photometry((phot))
-        self.wcen = wcen[0]
-        self.Fsyn = Fsyn[0]
-        self.Fsig = Fsig[0][0]
-
-        self.gain = F_phot / self.Fsyn
-
-    def calib_gain(self):
-        return self.gain
-
-    def image(self):
-        return self.Fsyn
-    
-    def write_image(self, filSYN):
-        comment = "Synthetic photometry with " + self.phot
-        write_fits(filSYN, self.hdr, self.Fsyn, self.wvl, COMMENT=comment)
-
-class phot2phot(intercalib):
-    '''
-    Intercalibration between two photometry
-    '''
-    def __init__(self, filIN, filREF, filKER=None, saveKER=None, \
-        uncIN=None, Nmc=0, filOUT=None):
-
-        ## Convolution (optional)
-        if filKER is not None:
-            conv = iconvolve(filIN, filKER, saveKER, \
-                uncIN, filOUT=filPRO)
-        else:
-            filPRO = filIN
-
-        ## Reprojection config
-        pro = imontage(filPRO, filREF)
-        self.im = pro.reproject(filOUT=filOUT)
-
-    def image(self):
-        return self.im
-"""
-
-def photometry_profile(datdir=None, *photometry):
-    '''
-    ------ INPUT ------
-    datdir              profile data path (Default: ./lib/)
-    photometry          photometry
-    ------ OUTPUT ------
-    '''
-    ## Read data
-    ##-----------
-    lam = []
-    val = []
-    for phot in photometry:
-        if datdir is None:
-            # datdir = rapyroot+'/lib/'
-            datdir = rapyroot+'/lib/data/'
-        # dat = read_ascii(datdir+'filt_'+phot, dtype=float)
-        # lam.append(dat[:,0])
-        # val.append(dat[:,1])
-
-        # dat = ascii.read(datdir+'filt_'+phot+ascext,
-        #                  names=['Wave','Spectral Response'])
-        # lam.append(dat['Wave'])
-        # val.append(dat['Spectral Response'])
-
-        lam.append(read_hdf5(datdir+'filt_'+phot,
-            'Filter wavelength (microns)'))
-        val.append(read_hdf5(datdir+'filt_'+phot,
-            'Filter transmission'))
-    # lam = np.array(lam)
-    # val = np.array(val)
-
-    ## Plotting setting
-    ##------------------
-    p = pplot(xlim=(1.9, 40.), ylim=(.01, 1.01),
-              xlog=1, ylog=0,
-              xlabel=r'$Wavelength,\,\,\lambda\,\,[\mu m]$',
-              ylabel='Response',
-              # ylabel='Spectral response\n(electrons / photon)',
-              legend='upper left', legendalpha=.1,
-              figsize=(12,3), title=None, clib='tableau')
-    for i,w in enumerate(lam):
-        p.add_plot(w, val[i], lw=1.8, label=photometry[i])
-
-    p.set_fig(left=.05, bottom=.2, right=.99, top=.99)
-
-    # sizeXL = 50
-    # p.set_font(xticksize=sizeXL, yticksize=sizeXL, \
-    #     axesize=sizeXL, legendsize=sizeXL)
-
-    ## vlines (e.g. band markers)
-    ##----------------------------
-    greylines = []
-    pinklines = []
-    greylines.extend([2.3567863, 5.1532226]) # AKARI/IRC
-    greylines.extend([5.242817, 7.597705]) # Spitzer/IRS-SL2
-    pinklines.extend([7.3675313, 8.66892]) # Spitzer/IRS-SL3
-    greylines.extend([7.5337057, 14.736635]) # Spitzer/IRS-SL1
-    greylines.extend([14.266611, 21.051888]) # Spitzer/IRS-LL2
-    pinklines.extend([19.483675, 21.50092]) # Spitzer/IRS-LL3
-    greylines.extend([20.555237, 38.41488]) # Spitzer/IRS-LL1
-    for gl in greylines:
-        p.ax.axvline(gl, linestyle='dotted', color='grey')
-    for pl in pinklines:
-        p.ax.axvline(pl, linestyle='dotted', color='pink')
-
-    ## tick setting
-    ##-------------------- x --------------------------
-    xtic = [2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 30, 40]
-    xtic_min = np.arange(2., 41., 1.)
-    p.ax.set_xticks(xtic, minor=False) # major
-    p.ax.set_xticks(xtic_min, minor=True) # minor
-    # ScalarFormatter().set_scientific(False)
-    p.ax.xaxis.set_major_formatter(ScalarFormatter()) # major
-    p.ax.xaxis.set_minor_formatter(NullFormatter()) # minor
-    # p.ax.minorticks_off()
-    ##--------------------- y --------------------------
-    ytic = np.arange(0, 1.01, .2)
-    ytic_min = np.arange(0, 1., .1)
-    p.ax.set_yticks(ytic, minor=False) # major
-    p.ax.set_yticks(ytic_min, minor=True) # minor
-    # ScalarFormatter().set_scientific(False)
-    p.ax.yaxis.set_major_formatter(ScalarFormatter()) # major
-    p.ax.yaxis.set_minor_formatter(NullFormatter()) # minor
-    # p.ax.minorticks_off()
-    ##-----------------------------------------------
-
-    return p
-
-"""
------------------------------- MAIN (test) ------------------------------
-"""
-if __name__ == "__main__":
-
-    pass

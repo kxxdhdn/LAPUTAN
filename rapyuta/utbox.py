@@ -5,10 +5,12 @@
 
 Utility box
 
+    type_shell, url(str)
     Error:
         InputError,
     strike, streplace_scl, streplace, tcolor, print_text
-    getcfd, merge_aliases, is_different_value, codefold
+    getcfd, maketmp, fclean
+    merge_aliases, is_different_value, codefold
 
     term_width
 
@@ -16,12 +18,15 @@ Utility box
 
 import inspect, os, re, sys
 from pathlib import Path
+from urllib.parse import urlparse
 import numpy as np
 import random
 from colorama import Fore, Back, Style
 from IPython.display import HTML, display
+import subprocess as SP
 import warnings
 
+## Local
 from rapyuta import rapyroot
 
 ## https://stackoverflow.com/questions/15411967/how-can-i-check-if-code-is-executed-in-the-ipython-notebook
@@ -50,6 +55,21 @@ if type_shell()=='terminal':
     term_width = int((os.popen('stty size', 'r').read().split())[1])
 else:
     term_width = 80
+
+## regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
+## url = re.findall(regex,'https://www.rapyuta.dev')
+class url(str):
+    '''
+    subtype of predefined str
+
+    '''
+    def __new__(cls, string, verbose=False):
+        if urlparse(string).scheme=='':
+            if verbose:
+                warnings.warn('Input string is not a url.')
+            return string
+        else:
+            return super(url, cls).__new__(cls, string)
 
 
 ##------------------------------------------------
@@ -356,7 +376,7 @@ def print_text(text,width=term_width,pad=0,margin=1,center=False,
 ##------------------------------------------------
 
 ## For current working directory, use os.getcwd()
-def getcfd(filename=None):
+def getcfd(filename=None, verbose=False):
     '''
     Current (caller's) file directory
 
@@ -380,14 +400,45 @@ def getcfd(filename=None):
     else:
         filename = os.path.abspath(filename)
 
-    if not os.path.isfile(filename):
-        warnings.warn(f'"{filename}" is either a directory,'
-                      'or is running on Jupyter notebook.'
-                      'For the latter case, try inserting the .ipynb file name.')
-
-    cfd = os.path.dirname(filename)
+    if os.path.isfile(filename):
+        cfd = os.path.dirname(filename)
+    else:
+        if verbose:
+            warnings.warn(f'"{filename}" is either a directory,'
+                          'or is running on Jupyter notebook.'
+                          'For the first case, the directory is returned.'
+                          'For the latter case, insert the file name.')
+        cfd = filename
 
     return cfd
+
+## Determine temporary file folder
+def maketmp(tmpdir=None):
+    '''
+    Determine temporary file folder
+
+    ------ INPUT ------
+    tmpdir              temporary folder directory
+    ------ OUTPUT ------
+    path_tmp            create tmp/ in cwd if input tmpdir is None
+    '''
+    if tmpdir is None:
+        path_tmp = os.getcwd()+'/tmp'
+    else:
+        path_tmp = tmpdir
+    Path(path_tmp).absolute().mkdir(parents=True, exist_ok=True)
+
+    return path_tmp
+
+## Quick file cleaning
+def fclean(fname, *alert):
+    '''
+    Clean folder/file
+
+    '''
+    SP.call('rm -rf '+fname, shell=True)
+    for text in alert:
+        print(text)
 
 ## https://python-forum.io/thread-22874.html    
 def merge_aliases(default, **kwargs):

@@ -58,12 +58,11 @@ def version_control():
 	Version control
 
     '''
-
     version = __version__
     if 'dev' in version:
         version = 'latest'
     else:
-        version = 'v' + version
+        version = f'v{__version__} ({release_date})'
 
     print(version)
 
