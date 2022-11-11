@@ -2,13 +2,15 @@
 ##---------
 .DS_Store
 
+## Other platforms
+.idea/*
+.vscode/*
+
 ## Fortran module
-##----------------
 *.mod
 *.smod
 
 ## C++
-##-----
 ## Prerequisites
 *.d
 
@@ -22,12 +24,16 @@ __pycache__/
 
 ## Distribution / packaging
 .Python
+_build
 build/
 develop-eggs/
 dist/
 downloads/
-eggs/
 .eggs/
+eggs/
+*.egg
+!/tests/**/*.egg
+*.egg-info/
 # lib/
 lib64/
 parts/
@@ -36,15 +42,13 @@ var/
 wheels/
 pip-wheel-metadata/
 share/python-wheels/
-*.egg-info/
 .installed.cfg
-*.egg
-MANIFEST
 
 ## PyInstaller
 ##  Usually these files are written by a python script from a template
 ##  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
+MANIFEST.in
 *.spec
 
 ## Installer logs
@@ -52,18 +56,18 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 ## Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
 .cache
-nosetests.xml
-coverage.xml
+.pytest_cache/
+htmlcov/
 *.cover
 *.py,cover
+.coverage
+.coverage.*
+coverage.xml
 .hypothesis/
-.pytest_cache/
+nosetests.xml
+.nox/
+.tox/
 
 ## Translations
 *.mo
@@ -84,6 +88,7 @@ instance/
 
 ## Sphinx documentation
 docs/_build/
+/docs/site/*
 
 ## PyBuilder
 target/
@@ -141,3 +146,14 @@ dmypy.json
 
 ## Pyre type checker
 .pyre/
+
+## Poetry
+/releases/*
+/poetry.toml
+poetry/core/*
+
+## Tests
+/test.py
+/test_*.*
+/tests/fixtures/simple_project/setup.py
+/tests/fixtures/project_with_extras/setup.py

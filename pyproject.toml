@@ -1,29 +1,27 @@
 [build-system]
 requires = [
-    "setuptools",
-    # "setuptools_scm>=6.2",
-    "wheel",
+    "poetry-core>=1.0.0",
 ]
-build-backend = "setuptools.build_meta"
-
-# [tool.setuptools_scm]
-# write_to = "astropy/_version.py"
+build-backend = "poetry.core.masonry.api"
 
 [constant]
 board_size = 3
 
-[project]
+[tool.poetry]
 name = "rapyuta"
+version = "2.2.2"
+description = "Regular AstroPY UTility Assemblage"
 authors = [
-    {name = "D. HU"},
-    {email = "dangning.hu@outlook.com"}
+    "Dangning HU <dangning.hu@outlook.com>",
 ]
 maintainers = [
-    {name = "D. HU"},
-    {email = "dangning.hu@outlook.com"}
+    "Dangning HU <dangning.hu@outlook.com>",
 ]
-license = {text = "BSD 3-Clause License"}
-description = "Regular AstroPY UTility Assemblage"
+license = "BSD 3-Clause License"
+readme = "README.org"
+# documentation = ""
+# homepage = ""
+repository = "https://github.com/kxxdhdn/RAPYUTA"
 keywords = [
     "astronomy",
     "astrophysics",
@@ -46,51 +44,48 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Astronomy",
     "Topic :: Scientific/Engineering :: Physics",
 ]
-requires-python = ">=3.8"
-dependencies = [
-    'astropy>=5.1',
-    'colorama',
-    'h5py',
-    'matplotlib', 
-    'numpy',
-    'photutils',
-    'reproject>=0.7.1',
-    'scipy',
-    'specutils',
-    'tqdm',
+packages = [
+    ## Poetry assumes the package contains a package with the same name as
+    ## tool.poetry.name located in the root of the project
+    { include = "rapyuta", from = "." },
 ]
-dynamic = ["version", "readme"]
+include = [
+    { path = "tests", format = "sdist" },
+    # { path = "for_wheel.txt", format = ["sdist", "wheel"] },
+]
+exclude = ["rapyuta._dev"]
 
-[project.urls]
-repository = "https://github.com/kxxdhdn/RAPYUTA"
-# homepage = ""
-# documentation = ""
+[tool.poetry.dependencies]
+python = ">=3.8"
+astropy = ">=5.1"
+colorama = "*"
+h5py = "*"
+matplotlib = "*"
+numpy = "*"
+photutils = "*"
+reproject = ">=0.7.1"
+scipy = "*"
+specutils = "*"
+tqdm = "*"
+
+[tool.poetry.dev-dependencies]
+
+[tool.poetry.group.test.dependencies]
+# pytest = "*"
+
+[tool.poetry.group.docs.dependencies]
+# mkdocs = "*"
+
+[tool.poetry.plugins]
+
+[tool.poetry.scripts]
+rapyboost = "rapyuta:boost_rapyuta"
+
+# [[tool.poetry.source]]
+# name = "private"
+# url = "http://example.com/simple"
+
+[tool.poetry.urls]
 manual = "https://github.com/kxxdhdn/RAPYUTA/man"
 reports = "https://github.com/kxxdhdn/RAPYUTA/issues"
 source = "https://github.com/kxxdhdn/RAPYUTA/rapyuta"
-
-[project.scripts]
-rapyboost = "rapyuta:boost_rapyuta"
-
-[tool.setuptools]
-zip-safe = false
-include-package-data = true # (true by default)
-
-[tool.setuptools.dynamic]
-version = {attr = "rapyuta.version.__version__"}
-readme = {file = "README.org"}
-
-# [tool.setuptools.packages]
-# find = {} # Scan the project directory with the default parameters
-
-[tool.setuptools.packages.find]
-where = ["."] # list of folders that contain the packages (["."] by default)
-include = ["rapyuta*"] # package names should match these glob patterns (["*"] by default)
-exclude = ["rapyuta._dev"] # exclude packages matching these glob patterns (empty by default)
-namespaces = false # to disable scanning PEP 420 namespaces (true by default)
-
-[tool.cibuildwheel.macos]
-archs = ["x86_64", "arm64"]
-
-[tool.cibuildwheel.linux]
-archs = ["auto", "aarch64"]
