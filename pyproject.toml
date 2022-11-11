@@ -81,9 +81,10 @@ tqdm = "*"
 [tool.poetry.scripts]
 rapyboost = "rapyuta:boost_rapyuta"
 
-# [[tool.poetry.source]]
-# name = "private"
-# url = "http://example.com/simple"
+[[tool.poetry.source]]
+name = "tsinghua"
+url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/"
+default = true
 
 [tool.poetry.urls]
 manual = "https://github.com/kxxdhdn/RAPYUTA/man"
